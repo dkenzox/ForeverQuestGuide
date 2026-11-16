@@ -8,27 +8,86 @@ function Entries.QuestTitle(quest, level)
     return quest.level and ("[%d] %s"):format(level, quest.name) or quest.name
 end
 
+local function questRow(result, zone, playerLevel, startZone)
+    local depth = startZone and 2 or 0
+    local quest = result.quest
+    local active = result.status == "active"
+    local points = Pins.Points(quest, zone, (active or startZone) and "objective" or "start")
+    if (active or startZone) and #points == 0 then points = Pins.Points(quest, zone, "finish") end
+    local lines = table.concat(quest.lines, "\n")
+    local subtitle = active and L.STATUS_ACTIVE or (#quest.starterItems > 0 and L.RELATION_ITEM or L.RELATION_START)
+    if startZone then
+        subtitle = L.STARTS_IN_ZONE:format(Data.ZoneName(startZone))
+    elseif points[1] and points[1].name then
+        subtitle = subtitle .. " · " .. points[1].name
+    end
+    local description = lines ~= "" and lines or subtitle
+    if not active and not quest.native and (not quest.min or quest.min <= 0) and result.level > playerLevel then
+        subtitle = L.MIN_LEVEL_UNVERIFIED .. " · " .. subtitle
+        description = description .. "\n" .. L.MIN_LEVEL_UNVERIFIED
+    end
+    return {
+        key = startZone and (startZone .. ":" .. quest.id) or quest.id,
+        title = Entries.QuestTitle(quest, result.level), quest = quest, points = points, depth = depth,
+        startZone = startZone,
+        subtitle = subtitle, summary = Rewards.Summary(quest), description = description,
+        icon = Guide.View.icons.quests, tint = {r = result.r, g = result.g, b = result.b},
+    }
+end
+
 function Entries.Quests(quests, zone)
-    local entries = {}
-    local playerLevel = UnitLevel("player")
+    local entries, playerLevel = {}, UnitLevel("player")
     for _, result in ipairs(quests) do
-        local quest = result.quest
-        local active = result.status == "active"
-        local points = Pins.Points(quest, zone, active and "objective" or "start")
-        if active and #points == 0 then points = Pins.Points(quest, zone, "finish") end
-        local lines = table.concat(quest.lines, "\n")
-        local subtitle = active and L.STATUS_ACTIVE or (#quest.starterItems > 0 and L.RELATION_ITEM or L.RELATION_START)
-        if points[1] and points[1].name then subtitle = subtitle .. " · " .. points[1].name end
-        local description = lines ~= "" and lines or subtitle
-        if not active and not quest.native and (not quest.min or quest.min <= 0) and result.level > playerLevel then
-            subtitle = L.MIN_LEVEL_UNVERIFIED .. " · " .. subtitle
-            description = description .. "\n" .. L.MIN_LEVEL_UNVERIFIED
+        entries[#entries + 1] = questRow(result, zone, playerLevel)
+    end
+    return entries
+end
+
+function Entries.AvailableQuests(quests, zone, collapsed)
+    local entries, localQuests, elsewhere, startZones = {}, {}, {}, {}
+    local playerLevel, remoteCount = UnitLevel("player"), 0
+    for _, result in ipairs(quests) do
+        if result.startZones then
+            remoteCount = remoteCount + 1
+            for _, id in ipairs(result.startZones) do
+                if not elsewhere[id] then
+                    elsewhere[id] = {}
+                    startZones[#startZones + 1] = { id = id, name = Data.ZoneName(id) }
+                end
+                local group = elsewhere[id]
+                group[#group + 1] = result
+            end
+        else
+            localQuests[#localQuests + 1] = result
         end
+    end
+    table.sort(startZones, function(a, b)
+        if a.name ~= b.name then return a.name < b.name end
+        return a.id < b.id
+    end)
+    local function addHeader(key, title, count, depth)
         entries[#entries + 1] = {
-            key = quest.id, title = Entries.QuestTitle(quest, result.level), quest = quest, points = points,
-            subtitle = subtitle, summary = Rewards.Summary(quest), description = description,
-            icon = Guide.View.icons.quests, tint = {r = result.r, g = result.g, b = result.b},
+            key = key, title = title, count = count, depth = depth,
+            header = true, collapsed = collapsed[key],
         }
+        return not collapsed[key]
+    end
+    if addHeader("local", L.START_IN_THIS_ZONE, #localQuests, 0) then
+        for _, result in ipairs(localQuests) do
+            local row = questRow(result, zone, playerLevel)
+            row.depth = 1
+            entries[#entries + 1] = row
+        end
+    end
+    if addHeader("elsewhere", L.START_SOMEWHERE_ELSE, remoteCount, 0) then
+        for _, start in ipairs(startZones) do
+            local group = elsewhere[start.id]
+            if addHeader("zone:" .. start.id, start.name, #group, 1) then
+                for _, result in ipairs(group) do
+                    entries[#entries + 1] = questRow(result, zone, playerLevel, start.id)
+                end
+            end
+        end
     end
     return entries
 end

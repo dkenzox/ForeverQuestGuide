@@ -162,6 +162,10 @@ function View.Create(tabs, actions)
     ui.context = font(header, "GameFontHighlightSmall", "BOTTOMLEFT", 83, 6, 560)
     ui.source = font(header, "GameFontDisableSmall", "BOTTOMRIGHT", -15, 7, 180)
     ui.source:SetJustifyH("RIGHT")
+    ui.changeZone = View.Button(header, L.CHANGE_ZONE, 141, 23, "TOPRIGHT", -45, -17, actions.changeZone)
+    ui.browsingZone = font(header, "GameFontHighlightSmall", "RIGHT", -203, 0, 225)
+    ui.browsingZone:SetJustifyH("RIGHT")
+    ui.browsingZone:SetTextColor(.89, .76, .53)
     ui.close = CreateFrame("Button", nil, header, "UIPanelCloseButton")
     ui.close:SetPoint("TOPRIGHT", 0, 2)
     ui.close:SetScript("OnClick", actions.close)
@@ -237,17 +241,34 @@ local function fillRows(rows, entries, index, size, showQuestLinks, compact)
         row:SetShown(entry ~= nil)
         if entry then
             row.selected:SetShown(index == position)
-            row.title:SetText(entry.title)
+            local title = entry.title
+            if entry.header then
+                title = ("%s  %s (%d)"):format(entry.collapsed and "+" or "-", title, entry.count)
+            end
+            row.title:SetText(title)
             local color = entry.tint
-            row.title:SetTextColor(color and color.r or 1, color and color.g or .89, color and color.b or .69)
+            row.title:SetTextColor(color and color.r or 1, color and color.g or .89,
+                color and color.b or (entry.header and .35 or .69))
             local questLink = showQuestLinks and entry.quest
             row.subtitle:SetShown(not questLink)
             row.subtitle:SetText(entry.subtitle or "")
             if not compact then
+                local indent = (entry.depth or 0) * 10
+                local offset = (entry.header and 10 or 47) + indent
+                local width = row:GetWidth() - offset - 6
+                row.title:ClearAllPoints()
+                row.title:SetPoint(entry.header and "LEFT" or "TOPLEFT", offset, entry.header and 0 or -5)
+                row.title:SetWidth(width)
+                row.subtitle:ClearAllPoints()
+                row.subtitle:SetPoint("TOPLEFT", offset, -19)
+                row.subtitle:SetWidth(width)
+                row.icon:ClearAllPoints()
+                row.icon:SetPoint("LEFT", 8 + indent, 0)
                 row.icon:SetTexture(entry.icon)
                 row.summary:SetText(entry.summary or "")
                 row.summary:ClearAllPoints()
-                row.summary:SetPoint(questLink and "TOPLEFT" or "BOTTOMLEFT", 47, questLink and -19 or 4)
+                row.summary:SetPoint(questLink and "TOPLEFT" or "BOTTOMLEFT", offset, questLink and -19 or 4)
+                row.summary:SetWidth(width)
                 row.questLink:SetShown(not not questLink)
                 if questLink then row.questLink.label:SetText(entry.subtitle) end
             end
@@ -256,9 +277,10 @@ local function fillRows(rows, entries, index, size, showQuestLinks, compact)
     return page, pages
 end
 
-function View.Rows(ui, entries, index, showQuestLinks)
+function View.Rows(ui, entries, index, showQuestLinks, total)
     local page, pages = fillRows(ui.rows, entries, index, View.pageSize, showQuestLinks)
-    ui.count:SetText(#entries > 0 and #entries or "")
+    total = total or #entries
+    ui.count:SetText((total > 0 or entries[1]) and total or "")
     ui.page:SetText(("%d / %d"):format(page, pages))
     ui.prev:SetEnabled(page > 1)
     ui.next:SetEnabled(page < pages)

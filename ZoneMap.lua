@@ -164,7 +164,7 @@ local stepLegend = {
     finish = "|cff7aff80?|r  " .. L.SECTION_FINISH,
 }
 
-function ZoneMap.Draw(map, zone, entries, focused, tab, highlighted, onlySelected, step)
+function ZoneMap.Draw(map, zone, entries, focused, tab, highlighted, onlySelected, step, showPlayer)
     if map.zone ~= zone then loadArt(map, zone) end
     local count, cells = 0, {}
     local color = colors[tab]
@@ -232,7 +232,7 @@ function ZoneMap.Draw(map, zone, entries, focused, tab, highlighted, onlySelecte
         if GameTooltip:IsOwned(pin) then GameTooltip:Hide() end
         pin:Hide()
     end
-    ZoneMap.UpdatePlayer(map, zone)
+    ZoneMap.UpdatePlayer(map, showPlayer and zone or nil)
 end
 
 function ZoneMap.Create(parent, onPin, width, height)

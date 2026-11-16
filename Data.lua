@@ -58,6 +58,39 @@ end
 
 Data.ZoneForMap = zoneForMap
 
+function Data.KnownZones(currentZone)
+    local result, seen = {}, {}
+    local zoneType = Enum and Enum.UIMapType and Enum.UIMapType.Zone or 3
+    local function add(id)
+        if not id or seen[id] then return end
+        seen[id] = true
+        local info = Data.MapInfo(id)
+        if not (info and info.mapType == zoneType and info.name and info.name ~= "") then return end
+        local parent = Data.MapInfo(info.parentMapID)
+        result[#result + 1] = { mapID = id, name = info.name, region = parent and parent.name }
+    end
+
+    if C_Map.GetMapChildrenInfo then
+        local function addChildren(parent)
+            for _, info in ipairs(C_Map.GetMapChildrenInfo(parent, zoneType, true) or empty) do add(info.mapID) end
+        end
+        addChildren(947) -- Azeroth world map
+        local info = Data.MapInfo(currentZone)
+        if info and info.parentMapID and info.parentMapID > 0 and info.parentMapID ~= 947 then
+            addChildren(info.parentMapID)
+        end
+    end
+    for id in pairs(zones) do add(id) end
+    for id in pairs(Guide.ResourceSpots or empty) do add(id) end
+    add(currentZone)
+    table.sort(result, function(a, b)
+        if a.name ~= b.name then return a.name < b.name end
+        if a.region ~= b.region then return (a.region or "") < (b.region or "") end
+        return a.mapID < b.mapID
+    end)
+    return result
+end
+
 local function addUnique(list, value)
     if not value then return end
     for _, existing in ipairs(list) do
@@ -444,19 +477,32 @@ function Data.IsDungeonQuest(quest)
     return info and info.mapType == (Enum and Enum.UIMapType and Enum.UIMapType.Dungeon or 4)
 end
 
-function Data.ZoneQuests(mapID, player, hideTrivial, mode, hideDungeons)
+function Data.ZoneQuests(mapID, player, hideTrivial, mode, hideDungeons, includeRemote)
     local result = {}
     for _, quest in ipairs(Data.Zone(mapID)) do
         local area = quest.areas[mapID]
         local status, label = Data.Status(quest, player)
         local active = status == "active"
-        local available = area.start and (status == "possible" or status == "starter")
+        local eligible = status == "possible" or status == "starter"
+        local startZones
+        if includeRemote and eligible and not area.start and (area.objective or area.finish) then
+            for startZone, relation in pairs(quest.areas) do
+                if relation.start then
+                    startZones = startZones or {}
+                    startZones[#startZones + 1] = startZone
+                end
+            end
+        end
+        local available = eligible and (area.start or startZones)
         if ((active and mode ~= nil) or (available and mode ~= "active"))
             and not (hideDungeons and Data.IsDungeonQuest(quest)) then
             local level, r, g, b = Data.Difficulty(quest, player)
             local trivial = quest.level and quest.level > 0 and math.max(r,g,b) - math.min(r,g,b) < .08
             if active or not (hideTrivial and trivial) then
-                result[#result + 1] = { quest = quest, status = status, label = label, level = level, r = r, g = g, b = b }
+                result[#result + 1] = {
+                    quest = quest, status = status, label = label, level = level, r = r, g = g, b = b,
+                    startZones = startZones,
+                }
             end
         end
     end
