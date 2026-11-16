@@ -234,7 +234,7 @@ local function indexQuest(id)
         fromQuest = fields[20], disabledBy = fields[21], excludes = fields[22] or empty,
         skill = fields[23], minRep = fields[24], maxRep = fields[25], spell = fields[26],
         specialization = fields[27], breadcrumb = fields[28], breadcrumbs = fields[29] or empty,
-        ranks = fields[30] or empty, nextQuest = fields[15],
+        ranks = fields[30] or empty, nextQuest = fields[15], areaID = fields[14],
         starterItems = starterItems, givers = getGivers(fields[2], starterItems),
         finishers = getGivers(fields[3]), objectives = getObjectives(fields), areas = {},
     }
@@ -430,14 +430,29 @@ function Data.Difficulty(quest, player)
     return level, .6, .6, .6
 end
 
-function Data.ZoneQuests(mapID, player, hideTrivial, mode)
+function Data.IsDungeonQuest(quest)
+    local tag
+    if C_QuestLog.GetQuestTagInfo then
+        local info = C_QuestLog.GetQuestTagInfo(quest.id)
+        tag = info and info.tagID
+    elseif GetQuestTagInfo then
+        tag = GetQuestTagInfo(quest.id)
+    end
+    -- Dungeon and Heroic, as used by the client's quest tags.
+    if tag and tag ~= 0 then return tag == 81 or tag == 85 end
+    local info = quest.areaID and Data.MapInfo(mapByArea[quest.areaID])
+    return info and info.mapType == (Enum and Enum.UIMapType and Enum.UIMapType.Dungeon or 4)
+end
+
+function Data.ZoneQuests(mapID, player, hideTrivial, mode, hideDungeons)
     local result = {}
     for _, quest in ipairs(Data.Zone(mapID)) do
         local area = quest.areas[mapID]
         local status, label = Data.Status(quest, player)
         local active = status == "active"
         local available = area.start and (status == "possible" or status == "starter")
-        if (active and mode ~= nil) or (available and mode ~= "active") then
+        if ((active and mode ~= nil) or (available and mode ~= "active"))
+            and not (hideDungeons and Data.IsDungeonQuest(quest)) then
             local level, r, g, b = Data.Difficulty(quest, player)
             local trivial = quest.level and quest.level > 0 and math.max(r,g,b) - math.min(r,g,b) < .08
             if active or not (hideTrivial and trivial) then

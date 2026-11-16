@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3
+
+- Fichas de recompensa más altas, con margen para texto de dos líneas. Los controles de página quedan en el encabezado.
+- Filtros de mazmorras y triviales compartidos entre Misiones y Equipo, con preferencia por personaje.
+- Equipo muestra las etapas, los pines y las recompensas de la misión en la misma pestaña.
+
 ## 0.3.2
 
 - Al seleccionar una etapa, el mapa muestra solo sus ubicaciones.

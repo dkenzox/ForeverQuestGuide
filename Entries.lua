@@ -123,8 +123,8 @@ function Entries.Gear(zone, player, quests)
             itemID = item.id, icon = item.icon, tint = item.tint,
             subtitle = Entries.QuestTitle(item.quest, level),
             summary = itemType,
-            description = itemType .. "\n" .. item.reward.kind .. " · " .. L.REQUIRED_ITEM_LEVEL:format(item.level)
-                .. (stats and stats ~= "" and ("\n" .. stats) or ""),
+            itemStats = item.reward.kind .. " · " .. L.REQUIRED_ITEM_LEVEL:format(item.level)
+                .. (stats and stats ~= "" and (" · " .. stats) or ""),
         }
     end
     return entries, waiting

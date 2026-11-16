@@ -3,8 +3,9 @@ local L = Guide.Locale
 local RewardView = {}
 Guide.RewardView = RewardView
 
-local tileWidth, tileHeight, rowStep = 172, 33, 38
-local itemTop, metricTop, metricRow = 34, 47, 86
+local tileWidth, tileHeight, rowStep = 174, 42, 45
+local itemTop, metricTop, metricRow = 34, 44, 89
+local headingHeight, textPadding = 13, 10
 local unknownIcon = "Interface\\Icons\\INV_Misc_QuestionMark"
 local xpIcon = "Interface\\Icons\\XP_Icon"
 local moneyIcon = "Interface\\Icons\\INV_Misc_Coin_01"
@@ -50,8 +51,8 @@ local function createTile(sheet, isItem)
     tile.iconFrame = iconFrame
 
     local plate = CreateFrame("Frame", nil, tile)
-    plate:SetPoint("TOPLEFT", 36, -2)
-    plate:SetPoint("BOTTOMRIGHT", 0, 2)
+    plate:SetPoint("TOPLEFT", 36, 0)
+    plate:SetPoint("BOTTOMRIGHT", 0, 0)
     local skin
     if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(plateAtlas) then
         skin = plate:CreateTexture(nil, "BACKGROUND")
@@ -64,8 +65,8 @@ local function createTile(sheet, isItem)
     end
     tile.skin = skin
 
-    local label = text(plate, isItem and "GameFontHighlight" or "GameFontHighlightLarge", "LEFT", 7, 0)
-    label:SetWidth(tileWidth - 49)
+    local label = text(plate, isItem and "GameFontHighlight" or "GameFontHighlightLarge", "LEFT", textPadding, 0)
+    label:SetPoint("RIGHT", plate, "RIGHT", -textPadding, 0)
     label:SetMaxLines(2)
     label:SetWordWrap(true)
     label:SetJustifyH("LEFT")
@@ -142,7 +143,7 @@ local function layout(entries, top, bottom, metric)
         local heading = newGroup
         if i == 1 and metric and entry.subtitle == L.REWARD_GUARANTEED then heading = false end
         local needsRow = newGroup or column == 0
-        if not page or (needsRow and y + (heading and 15 or 0) + tileHeight > bottom) then
+        if not page or (needsRow and y + (heading and headingHeight or 0) + tileHeight > bottom) then
             page = { first = i, blocks = {}, tiles = {} }
             pages[#pages + 1] = page
             y, column = top, 0
@@ -150,7 +151,7 @@ local function layout(entries, top, bottom, metric)
         end
         if heading then
             page.blocks[#page.blocks + 1] = { y = y, title = entry.heading }
-            y = y + 15
+            y = y + headingHeight
         end
         if newGroup then column, group = 0, entry.subtitle end
         if column == 0 then y = y + rowStep end
@@ -177,7 +178,7 @@ end
 
 function RewardView.Draw(sheet, entries, index)
     local metric = entries.xp or entries.money
-    local pages = layout(entries, metric and metricRow or itemTop, sheet.maxHeight - 23, metric)
+    local pages = layout(entries, metric and metricRow or itemTop, sheet.maxHeight - 9, metric)
     local pageIndex = #pages
     while pageIndex > 1 and pages[pageIndex].first > index do pageIndex = pageIndex - 1 end
     local page = pages[pageIndex]
@@ -189,7 +190,7 @@ function RewardView.Draw(sheet, entries, index)
     setMetric(sheet.xp, entries.xp, 0)
     setMetric(sheet.money, entries.money, entries.xp and 1 or 0)
     local used = page and page.used or (metric and metricTop + tileHeight or 48)
-    sheet:SetHeight(used + (#pages > 1 and 22 or 9))
+    sheet:SetHeight(used + 9)
 
     local blocks, tiles = {}, {}
     if page then blocks, tiles = page.blocks, page.tiles end
