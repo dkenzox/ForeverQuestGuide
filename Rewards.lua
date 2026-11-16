@@ -50,9 +50,17 @@ end
 
 local function moneyText(copper)
     if not copper then return L.UNKNOWN_MONEY end
-    if copper == 0 then return "0|TInterface\\MoneyFrame\\UI-CopperIcon:10|t" end
-    if GetCoinTextureString then return GetCoinTextureString(copper, 10) end
-    return ("%d|TInterface\\MoneyFrame\\UI-CopperIcon:10|t"):format(copper)
+    local gold = math.floor(copper / 10000)
+    local silver = math.floor(copper / 100) % 100
+    local remainder = copper % 100
+    local parts = {}
+    local function coin(amount, metal)
+        parts[#parts + 1] = ("%d|TInterface\\MoneyFrame\\UI-%sIcon:10:10|t"):format(amount, metal)
+    end
+    if gold > 0 then coin(gold, "Gold") end
+    if silver > 0 then coin(silver, "Silver") end
+    if remainder > 0 or #parts == 0 then coin(remainder, "Copper") end
+    return table.concat(parts, " ")
 end
 
 function Rewards.Summary(quest)

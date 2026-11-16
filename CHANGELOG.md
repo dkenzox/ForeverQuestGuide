@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+- Símbolos de inicio, objetivo y entrega centrados en sus pines.
+- Las recompensas de dinero se descomponen en monedas de oro, plata y cobre.
+- La lista identifica las misiones por encima del nivel del personaje cuyo nivel mínimo figura sin verificar.
+
 ## 0.2.2
 
 - Pines redondos y espaciados. Los recursos llevan su icono en el mapa.

@@ -10,6 +10,7 @@ end
 
 function Entries.Quests(quests, zone)
     local entries = {}
+    local playerLevel = UnitLevel("player")
     for _, result in ipairs(quests) do
         local quest = result.quest
         local active = result.status == "active"
@@ -18,9 +19,14 @@ function Entries.Quests(quests, zone)
         local lines = table.concat(quest.lines, "\n")
         local subtitle = active and L.STATUS_ACTIVE or (#quest.starterItems > 0 and L.RELATION_ITEM or L.RELATION_START)
         if points[1] and points[1].name then subtitle = subtitle .. " · " .. points[1].name end
+        local description = lines ~= "" and lines or subtitle
+        if not active and not quest.native and (not quest.min or quest.min <= 0) and result.level > playerLevel then
+            subtitle = L.MIN_LEVEL_UNVERIFIED .. " · " .. subtitle
+            description = description .. "\n" .. L.MIN_LEVEL_UNVERIFIED
+        end
         entries[#entries + 1] = {
             key = quest.id, title = Entries.QuestTitle(quest, result.level), quest = quest, points = points,
-            subtitle = subtitle, summary = Rewards.Summary(quest), description = lines ~= "" and lines or subtitle,
+            subtitle = subtitle, summary = Rewards.Summary(quest), description = description,
             icon = Guide.View.icons.quests, tint = {r = result.r, g = result.g, b = result.b},
         }
     end

@@ -4,9 +4,9 @@ local QuestPins = {}
 Guide.QuestPins = QuestPins
 
 local stages = {
-    { key = "start", field = "givers", glyph = "!", r = 1, g = .81, b = .23 },
-    { key = "objective", field = "objectives", glyph = "×", r = .34, g = .88, b = 1 },
-    { key = "finish", field = "finishers", glyph = "?", r = .48, g = 1, b = .50 },
+    { key = "start", field = "givers", glyph = 0, r = 1, g = .81, b = .23 },
+    { key = "objective", field = "objectives", glyph = 1, r = .34, g = .88, b = 1 },
+    { key = "finish", field = "finishers", glyph = 2, r = .48, g = 1, b = .50 },
 }
 local stageByKey = {}
 for _, stage in ipairs(stages) do stageByKey[stage.key] = stage end
@@ -61,9 +61,9 @@ function QuestPins.Decorate(pin)
     pin.fill = roundTexture(pin, "BORDER", 1)
     pin.fill:SetColorTexture(.075, .057, .033, .96)
     pin.picture = roundTexture(pin, "ARTWORK", 1)
-    pin.caption = pin:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    pin.caption:SetPoint("CENTER", 0, .5)
-    pin.caption:SetScale(.82)
+    pin.glyph = pin:CreateTexture(nil, "OVERLAY")
+    pin.glyph:SetPoint("CENTER", pin, "CENTER", 0, 0)
+    pin.glyph:SetTexture("Interface\\AddOns\\ForeverQuestGuide\\Art\\QuestGlyphs.tga")
 end
 
 function QuestPins.Style(pin, stage, color, selected, icon)
@@ -71,9 +71,12 @@ function QuestPins.Style(pin, stage, color, selected, icon)
     local r, g, b
     if style then r, g, b = style.r, style.g, style.b else r, g, b = unpack(color) end
     pin.border:SetColorTexture(r, g, b, selected and 1 or .8)
-    pin.caption:SetTextColor(r, g, b)
-    pin.caption:SetText(style and style.glyph or "•")
-    pin.caption:SetShown(not icon)
+    local glyph = style and style.glyph or 3
+    local size = selected and 10 or 7
+    pin.glyph:SetSize(size, size)
+    pin.glyph:SetTexCoord(glyph / 4, (glyph + 1) / 4, 0, 1)
+    pin.glyph:SetVertexColor(r, g, b)
+    pin.glyph:SetShown(not icon)
     pin.picture:SetTexture(icon)
     pin.picture:SetShown(icon ~= nil)
 end
