@@ -1,0 +1,5 @@
+<Bindings xmlns="http://www.blizzard.com/wow/ui/">
+    <Binding name="FOREVERQUESTGUIDE_TOGGLE" header="FOREVERQUESTGUIDE" category="ADDONS">
+        ForeverQuestGuide_Toggle()
+    </Binding>
+</Bindings>
