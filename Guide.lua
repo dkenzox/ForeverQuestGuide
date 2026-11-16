@@ -122,9 +122,9 @@ local function getDock(quest)
     for _, key in ipairs(View.sections) do
         local rows = Entries.Quest(quest, zone, key)
         sections[key] = rows
-        if key == "rewards" then captions[key] = rows.totals
-        else captions[key] = rows[1] and rows[1].title or L.NO_COORDINATES end
+        captions[key] = rows[1] and rows[1].title or L.NO_COORDINATES
     end
+    sections.rewards = Entries.Quest(quest, zone, "rewards")
     dockData = { quest = quest, sections = sections, captions = captions }
     return dockData
 end
@@ -148,7 +148,6 @@ end
 local function activePoint()
     local quest = selectedQuest()
     if not quest then return nearest(entries[index]) end
-    if detail and detail.section == "rewards" then return end
     return routePoint(getDock(quest), detail and routeSection or preferredStage(quest), detail and routeIndex or 1)
 end
 
@@ -167,31 +166,31 @@ draw = function()
     local entry, quest = entries[index], selectedQuest()
     local point = activePoint()
     local mapZone = zone
-    local highlighted
+    local highlighted, selectedStage
     if quest then
         local data = getDock(quest)
         local stage = detail and routeSection or preferredStage(quest)
         local locations = data.sections[stage]
         routeIndex = math.max(1, math.min(routeIndex, #locations))
         local location = locations[detail and routeIndex or 1]
-        if detail and detail.section ~= "rewards" then
+        if detail then
+            selectedStage = stage
             mapZone = (point and point.zone) or (location and location.mapZone) or zone
         end
         ui.detailTitle:SetText(Entries.QuestTitle(quest, Data.Difficulty(quest, Data.Player())))
         ui.detail:SetText(eligibility(quest))
-        View.Dock(ui, detail and detail.section or stage, data.captions, locations,
+        View.Dock(ui, stage, data.captions, locations,
             detail and detail.section ~= "rewards" and routeIndex or 0, data.sections.rewards,
             detail and detail.section == "rewards" and rewardIndex or 0,
-            location and location.description, detail ~= nil)
-        highlighted = Pins.Points(quest, mapZone)
+            location and location.description, detail and detail.section)
+        highlighted = Pins.Points(quest, mapZone, selectedStage)
     else
         ui.detailTitle:SetText(entry and entry.title or tabs[tab].label)
         ui.detail:SetText(entry and (entry.description or entry.subtitle) or ui.emptyText)
         View.Dock(ui)
         if entry and entry.quest then highlighted = Pins.Points(entry.quest, mapZone) end
     end
-    local coordinates = point and ("%s · %s · %.1f, %.1f"):format(Pins.Label(point.stage) or L.MARK,
-        Data.ZoneName(point.mapID), point.x, point.y)
+    local coordinates = point and ("%s · %.1f, %.1f"):format(Data.ZoneName(point.mapID), point.x, point.y)
     ui.coords:SetText(coordinates or "")
     ui.waypoint:SetEnabled(point ~= nil)
     ui.clearWaypoint:SetEnabled(not not (C_Map.ClearUserWaypoint and hasWaypoint()))
@@ -205,7 +204,7 @@ draw = function()
     end
     if point and highlighted then table.insert(highlighted, 1, point) end
     ZoneMap.Draw(ui.map, mapZone, mapEntries, mapIndex, tabs[tab].key, highlighted,
-        tabs[tab].key == "gear" or detail ~= nil)
+        tabs[tab].key == "gear" or detail ~= nil, selectedStage)
 end
 
 render = function(preserve)
@@ -332,7 +331,7 @@ end
 
 local function stepSection(offset)
     for i, section in ipairs(View.sections) do
-        if detail.section == section then
+        if routeSection == section then
             chooseSection(View.sections[(i - 1 + offset) % #View.sections + 1])
             return
         end
@@ -429,7 +428,11 @@ local function onPad(_, key)
     elseif key == "PAD3" then mark(activePoint())
     elseif key == "PADLSTICK" then clearWaypoint()
     elseif key == "PAD4" then toggleFilter()
-    elseif key == "PADRSTICK" then toggleQuestMode() end
+    elseif key == "PADRSTICK" then
+        if not detail then toggleQuestMode()
+        elseif detail.section == "rewards" then chooseSection(routeSection)
+        elseif #getDock(detail.quest).sections.rewards > 0 then chooseSection("rewards") end
+    end
 end
 
 local function checkZone()

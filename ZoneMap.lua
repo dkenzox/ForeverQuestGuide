@@ -158,11 +158,18 @@ function ZoneMap.UpdatePlayer(map, zone)
     if map.player:IsShown() then place(map.player, map.canvas, x, y) end
 end
 
-function ZoneMap.Draw(map, zone, entries, focused, tab, highlighted, onlySelected)
+local stepLegend = {
+    start = "|cffffcf3b!|r  " .. L.SECTION_START,
+    objective = "|cff57e0ff×|r  " .. L.SECTION_GOALS,
+    finish = "|cff7aff80?|r  " .. L.SECTION_FINISH,
+}
+
+function ZoneMap.Draw(map, zone, entries, focused, tab, highlighted, onlySelected, step)
     if map.zone ~= zone then loadArt(map, zone) end
     local count, cells = 0, {}
     local color = colors[tab]
     map.legend:SetShown(tab == "quests" or tab == "gear")
+    map.legendText:SetText(stepLegend[step] or L.MAP_LEGEND)
     map.caption:SetText(zone and Guide.Data.ZoneName(zone) or "")
     local width, height = map.canvas:GetWidth(), map.canvas:GetHeight()
     local function fits(px, py, spacing)
@@ -246,8 +253,7 @@ function ZoneMap.Create(parent, onPin, width, height)
     background:SetColorTexture(.06, .045, .027, .92)
     local legendText = legend:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     legendText:SetPoint("CENTER")
-    legendText:SetText(L.MAP_LEGEND)
-    map.legend = legend
+    map.legend, map.legendText = legend, legendText
     local caption = CreateFrame("Frame", nil, map)
     caption:SetSize(width - 20, 19)
     caption:SetPoint("TOP", 0, -4)

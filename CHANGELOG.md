@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+- Al seleccionar una etapa, el mapa muestra solo sus ubicaciones.
+- Se eliminó la pestaña de recompensas y el texto repetido de las ubicaciones. R3 permite enfocar los objetos del panel de recompensas.
+
 ## 0.3.1
 
 - La ficha de recompensas usa un fondo oscuro continuo con fichas independientes para EXP, monedas y objetos.

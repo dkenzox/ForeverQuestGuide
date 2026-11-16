@@ -34,10 +34,8 @@ function Entries.Quests(quests, zone)
 end
 
 local function addLocations(entries, sources, stage, localZone)
-    local role = Pins.Label(stage)
     for _, source in ipairs(sources) do
         local kind = source.labelKey and L[source.labelKey]
-        local label = kind and (role .. " · " .. kind) or role
         local byZone, zoneIDs = {}, {}
         for _, point in ipairs(source.points) do
             local group = byZone[point.zone]
@@ -53,13 +51,14 @@ local function addLocations(entries, sources, stage, localZone)
             return a < b
         end)
         if #zoneIDs == 0 then
-            entries[#entries + 1] = { title = source.name, subtitle = label .. " · " .. L.NO_COORDINATES }
+            entries[#entries + 1] = { title = source.name, subtitle = L.NO_COORDINATES }
         end
         for _, zone in ipairs(zoneIDs) do
             local points = byZone[zone]
+            local area = Data.ZoneName(zone)
             entries[#entries + 1] = {
-                title = source.name, subtitle = label .. " · " .. Data.ZoneName(zone),
-                description = label .. "\n" .. L.LOCATION_COUNT:format(#points), points = points, mapZone = zone,
+                title = source.name, subtitle = kind and (kind .. " · " .. area) or area,
+                points = points, mapZone = zone,
             }
         end
     end

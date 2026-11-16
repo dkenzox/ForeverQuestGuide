@@ -11,7 +11,7 @@ local icons = {
     fish = "Interface\\Icons\\Trade_Fishing",
 }
 View.icons = icons
-View.sections = { "start", "objective", "finish", "rewards" }
+View.sections = { "start", "objective", "finish" }
 
 local function font(parent, template, anchor, x, y, width)
     local label = parent:CreateFontString(nil, "OVERLAY", template)
@@ -118,15 +118,15 @@ end
 
 local function stageButton(parent, i, section, label, click)
     local button = CreateFrame("Button", nil, parent)
-    button:SetSize(181, 44)
-    button:SetPoint("TOPLEFT", 11 + (i - 1) * 187, -46)
+    button:SetSize(248, 44)
+    button:SetPoint("TOPLEFT", 11 + (i - 1) * 253, -46)
     local fill = image(button, "BACKGROUND", nil)
     fill:SetAllPoints()
     button.fill = fill
     button:SetHighlightTexture("Interface\\Buttons\\UI-Listbox-Highlight2", "ADD")
-    button.title = font(button, "GameFontNormal", "TOPLEFT", 9, -5, 163)
+    button.title = font(button, "GameFontNormal", "TOPLEFT", 9, -5, 228)
     button.title:SetText(label)
-    button.caption = font(button, "GameFontHighlightSmall", "TOPLEFT", 9, -24, 163)
+    button.caption = font(button, "GameFontHighlightSmall", "TOPLEFT", 9, -24, 228)
     button.caption:SetTextColor(.89, .82, .69)
     button:SetScript("OnClick", function() click(section) end)
     return button
@@ -191,7 +191,7 @@ function View.Create(tabs, actions)
     ui.waypoint = View.Button(dock, L.MARK, 108, 23, "TOPRIGHT", -11, -10, actions.mark)
     ui.clearWaypoint = View.Button(dock, L.CLEAR_MARK, 104, 23, "TOPRIGHT", -124, -10, actions.clear)
 
-    local labels = { L.SECTION_START, L.SECTION_GOALS, L.SECTION_FINISH, L.QUEST_REWARDS }
+    local labels = { L.SECTION_START, L.SECTION_GOALS, L.SECTION_FINISH }
     ui.sections = {}
     for i, key in ipairs(View.sections) do ui.sections[key] = stageButton(dock, i, key, labels[i], actions.section) end
     local route = CreateFrame("Frame", nil, dock)
@@ -263,7 +263,7 @@ function View.Rows(ui, entries, index, showQuestLinks)
     ui.next:SetEnabled(page < pages)
 end
 
-function View.Dock(ui, section, captions, locations, routeIndex, rewards, rewardIndex, note, hasFocus)
+function View.Dock(ui, section, captions, locations, routeIndex, rewards, rewardIndex, note, focus)
     local hasQuest = section ~= nil
     for key, button in pairs(ui.sections) do
         button:SetShown(hasQuest)
@@ -277,13 +277,15 @@ function View.Dock(ui, section, captions, locations, routeIndex, rewards, reward
     ui.rewardPrev:SetShown(hasQuest)
     ui.rewardNext:SetShown(hasQuest)
     local hint = L.PAD_GUIDE_V3
-    if hasFocus then hint = section == "rewards" and L.PAD_REWARDS or L.PAD_DETAIL end
+    if focus then hint = focus == "rewards" and L.PAD_REWARDS or L.PAD_DETAIL end
     ui.hint:SetText(hint)
     if not hasQuest then return end
 
     local page, pages = fillRows(ui.routeRows, locations, routeIndex, View.detailPageSize, false, true)
     ui.routeEmpty:SetShown(#locations == 0)
     ui.routeEmpty:SetText(L.QUEST_NO_DETAILS)
+    local row = ui.routeRows[(math.max(1, routeIndex) - 1) % View.detailPageSize + 1]
+    if row.title.IsTruncated and not row.title:IsTruncated() then note = nil end
     ui.routeNote:SetText(note or "")
     ui.routePage:SetText(pages > 1 and ("%d / %d"):format(page, pages) or "")
     ui.routePrev:SetShown(pages > 1)
