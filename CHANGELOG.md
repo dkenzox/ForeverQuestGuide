@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.5
+
+- La ficha de recompensas usa los marcos y los colores de misión de WoW, incluido el tinte rojo cuando el cliente marca un objeto como inutilizable.
+
 ## 0.2.4
 
 - La ficha de recompensas usa pergamino, iconos de objeto y grupos para recompensas a elección, garantizadas y registradas.

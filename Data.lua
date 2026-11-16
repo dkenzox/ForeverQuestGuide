@@ -455,18 +455,21 @@ end
 
 function Data.Rewards(questID)
     local result, seen = {}, {}
-    local function add(id, kind, count, name)
+    local function add(id, kind, count, name, quality, usable)
         if type(id) ~= "number" or id <= 0 or seen[id] then return end
         seen[id] = true
-        result[#result + 1] = { id = id, name = name or Data.ItemName(id), kind = kind, count = count or 1 }
+        result[#result + 1] = {
+            id = id, name = name or Data.ItemName(id), kind = kind, count = count or 1,
+            quality = quality, usable = usable,
+        }
     end
     local function fromGame(countFunc, getFunc, kind)
         if not (countFunc and getFunc) then return end
         local ok, count = pcall(countFunc, questID)
         if not ok or type(count) ~= "number" then return end
         for index = 1, count do
-            local read, name, _, quantity, _, _, id = pcall(getFunc, index, questID)
-            if read then add(id, kind, quantity, name) end
+            local read, name, _, quantity, quality, usable, id = pcall(getFunc, index, questID)
+            if read then add(id, kind, quantity, name, quality, usable) end
         end
     end
     if not HaveQuestRewardData or HaveQuestRewardData(questID) then

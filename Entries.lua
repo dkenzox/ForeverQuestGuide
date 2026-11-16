@@ -97,11 +97,11 @@ function Entries.Quest(quest, zone, section)
             for _, reward in ipairs(items) do
                 if reward.kind == group[1] then
                     local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(reward.id)
-                    local quality = C_Item and C_Item.GetItemQualityByID and C_Item.GetItemQualityByID(reward.id)
+                    local quality = reward.quality or (C_Item and C_Item.GetItemQualityByID and C_Item.GetItemQualityByID(reward.id))
                     entries[#entries + 1] = {
                         key = reward.id, title = reward.name, subtitle = reward.kind, heading = group[2],
-                        icon = icon, itemID = reward.id, quantity = reward.count,
-                        tint = quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality],
+                        icon = icon, itemID = reward.id, quantity = reward.count, usable = reward.usable,
+                        quality = quality,
                     }
                 end
             end

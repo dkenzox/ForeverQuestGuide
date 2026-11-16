@@ -5,7 +5,8 @@ Guide.RewardView = RewardView
 
 local tileWidth, tileHeight, rowStep = 174, 43, 47
 local firstRow, bottom = 32, 268
-local white = "Interface\\Buttons\\WHITE8X8"
+local parchmentFont = QuestFont and "QuestFont" or "GameFontHighlight"
+local nameplateArt = "Interface\\QuestFrame\\UI-QuestItemNameFrame"
 local unknownIcon = "Interface\\Icons\\INV_Misc_QuestionMark"
 
 local function text(parent, template, anchor, x, y)
@@ -15,8 +16,12 @@ local function text(parent, template, anchor, x, y)
     return label
 end
 
-local function ink(label)
-    label:SetTextColor(.17, .095, .04)
+local function ink(label, heading)
+    local body, title
+    if GetMaterialTextColors then body, title = GetMaterialTextColors("Parchment") end
+    local color = heading and title or body
+    if color then label:SetTextColor(color[1], color[2], color[3])
+    else label:SetTextColor(.16, .095, .045) end
     label:SetShadowColor(0, 0, 0, 0)
 end
 
@@ -37,23 +42,30 @@ local function tileFor(sheet, slot)
 
     tile = CreateFrame("Button", nil, sheet)
     tile:SetSize(tileWidth, tileHeight)
-    background(tile, "BACKGROUND", .27, .155, .075)
-    local fill = tile:CreateTexture(nil, "BORDER")
-    fill:SetPoint("TOPLEFT", 1, -1)
-    fill:SetPoint("BOTTOMRIGHT", -1, 1)
-    fill:SetTexture(white)
-    fill:SetGradient("VERTICAL", CreateColor(.36, .24, .13), CreateColor(.62, .46, .255))
-    tile:SetHighlightTexture("Interface\\Buttons\\UI-Listbox-Highlight2", "ADD")
+    tile.nameplate = {}
+    local strips = {
+        { 44, 4, .078125, .1171875 },
+        { 48, tileWidth - 58, .1171875, .828125 },
+        { tileWidth - 10, 10, .828125, .9140625 },
+    }
+    for i, strip in ipairs(strips) do
+        local texture = tile:CreateTexture(nil, "BACKGROUND")
+        texture:SetPoint("LEFT", strip[1], 0)
+        texture:SetSize(strip[2], 40)
+        texture:SetTexture(nameplateArt)
+        texture:SetTexCoord(strip[3], strip[4], .15625, .828125)
+        tile.nameplate[i] = texture
+    end
+    tile:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestItemHighlight", "ADD")
 
-    local iconBorder = tile:CreateTexture(nil, "ARTWORK")
-    iconBorder:SetSize(37, 37)
-    iconBorder:SetPoint("LEFT", 4, 0)
-    tile.iconBorder = iconBorder
-
-    local icon = tile:CreateTexture(nil, "ARTWORK", nil, 1)
-    icon:SetSize(33, 33)
-    icon:SetPoint("CENTER", iconBorder)
+    local icon = tile:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(37, 37)
+    icon:SetPoint("LEFT", 4, 0)
     tile.icon = icon
+    local quality = tile:CreateTexture(nil, "OVERLAY")
+    quality:SetAllPoints(icon)
+    quality:SetTexture("Interface\\Common\\WhiteIconFrame")
+    tile.quality = quality
 
     tile.quantity = text(tile, "GameFontHighlightSmall", "BOTTOMLEFT", 25, 6)
     tile.quantity:SetJustifyH("RIGHT")
@@ -89,17 +101,16 @@ function RewardView.Create(parent, onSelect)
     sheet:SetPoint("TOPLEFT", 9, -54)
     sheet:SetSize(374, 333)
     sheet.onSelect, sheet.tiles, sheet.headings = onSelect, {}, {}
-    background(sheet, "BACKGROUND", .87, .72, .46)
+    background(sheet, "BACKGROUND", 222 / 255, 176 / 255, 107 / 255)
     local paper = sheet:CreateTexture(nil, "BACKGROUND", nil, 1)
     paper:SetAllPoints()
     paper:SetTexture("Interface\\QuestFrame\\QuestBG")
     paper:SetTexCoord(.08, .63, .07, .65)
-    paper:SetAlpha(.42)
 
-    local title = text(sheet, "GameFontNormalLarge", "TOPLEFT", 12, -9)
+    local title = text(sheet, QuestTitleFont and "QuestTitleFont" or "GameFontNormalLarge", "TOPLEFT", 12, -9)
     title:SetText(L.QUEST_REWARDS)
-    ink(title)
-    sheet.empty = text(sheet, "GameFontHighlight", "TOPLEFT", 12, -41)
+    ink(title, true)
+    sheet.empty = text(sheet, parchmentFont, "TOPLEFT", 12, -41)
     sheet.empty:SetText(L.NO_ITEM_REWARDS)
     ink(sheet.empty)
 
@@ -108,11 +119,10 @@ function RewardView.Create(parent, onSelect)
     line:SetPoint("BOTTOMRIGHT", -12, 53)
     line:SetHeight(1)
     line:SetColorTexture(.45, .30, .16)
-    local totalsTitle = text(sheet, "GameFontHighlight", "BOTTOMLEFT", 12, 34)
+    local totalsTitle = text(sheet, parchmentFont, "BOTTOMLEFT", 12, 34)
     totalsTitle:SetText(L.REWARD_MONEY_XP)
     ink(totalsTitle)
     sheet.totals = text(sheet, "GameFontHighlightLarge", "BOTTOMLEFT", 12, 11)
-    ink(sheet.totals)
     sheet:Hide()
     return sheet
 end
@@ -155,7 +165,7 @@ function RewardView.Draw(sheet, entries, index)
     for i, block in ipairs(blocks) do
         local label = sheet.headings[i]
         if not label then
-            label = text(sheet, "GameFontHighlight", "TOPLEFT", 12, -block.y)
+            label = text(sheet, parchmentFont, "TOPLEFT", 12, -block.y)
             ink(label)
             sheet.headings[i] = label
         end
@@ -173,8 +183,20 @@ function RewardView.Draw(sheet, entries, index)
         tile:ClearAllPoints()
         tile:SetPoint("TOPLEFT", 11 + position.column * 179, -position.y)
         tile.icon:SetTexture(entry.icon or unknownIcon)
-        local color = entry.tint
-        tile.iconBorder:SetColorTexture(color and color.r or .72, color and color.g or .59, color and color.b or .37)
+        local color
+        if entry.quality ~= nil then
+            if ColorManager and ColorManager.GetColorDataForBagItemQuality then
+                color = ColorManager.GetColorDataForBagItemQuality(entry.quality)
+            else
+                color = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[entry.quality]
+            end
+        end
+        tile.quality:SetShown(color ~= nil)
+        if color then tile.quality:SetVertexColor(color.r, color.g, color.b) end
+        local usable = entry.usable ~= false
+        local r, gb = usable and 1 or .9, usable and 1 or 0
+        tile.icon:SetVertexColor(r, gb, gb)
+        for _, strip in ipairs(tile.nameplate) do strip:SetVertexColor(r, gb, gb) end
         tile.title:SetText(entry.title)
         tile.quantity:SetText(entry.quantity > 1 and entry.quantity or "")
         tile.focus:SetShown(index == position.index)
