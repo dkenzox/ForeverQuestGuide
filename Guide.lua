@@ -1,6 +1,6 @@
 local _, Guide = ...
 local L, Data, Native = Guide.Locale, Guide.Data, Guide.Native
-local View, ZoneMap, Entries = Guide.View, Guide.ZoneMap, Guide.Entries
+local View, ZoneMap, Entries, Pins = Guide.View, Guide.ZoneMap, Guide.Entries, Guide.QuestPins
 
 BINDING_HEADER_FOREVERQUESTGUIDE = "Forever Quest Guide"
 BINDING_NAME_FOREVERQUESTGUIDE_TOGGLE = L.BINDING_TOGGLE
@@ -14,8 +14,9 @@ local tabs = {
 }
 local ui, launcher, zone, detail, message
 local tab, index, entries, history = 1, 1, {}, {}
-local refreshPending, elapsed, dataPrimed
-local render, draw
+local refreshPending, refreshPins, elapsed, dataPrimed
+local render, draw, openQuest
+local activeOnly = false
 
 local function playerZone()
     return Data.ZoneForMap(C_Map.GetBestMapForUnit("player"))
@@ -53,26 +54,48 @@ local function mark(point)
     draw()
 end
 
-local function queueRefresh()
-    if refreshPending or not (ui and ui:IsShown()) then return end
+local function queueRefresh(itemsOnly)
+    if not itemsOnly then refreshPins = true end
+    if refreshPending then return end
     refreshPending = true
     C_Timer.After(.08, function()
         refreshPending = nil
-        if ui:IsShown() then render(true) end
+        if refreshPins then
+            refreshPins = nil
+            local settings = Guide.Character.Settings()
+            if Data.ready and zone and not settings.hideMinimap then
+                local quests = Data.ZoneQuests(zone, Data.Player(), not settings.showTrivial, "both")
+                Pins.RefreshMinimap(zone, quests, openQuest)
+            else
+                Pins.RefreshMinimap()
+            end
+        end
+        if ui and ui:IsShown() then render(true) end
     end)
 end
 
 draw = function()
     index = math.max(1, math.min(index, #entries))
-    View.Rows(ui, entries, index)
+    View.Rows(ui, entries, index, tabs[tab].key == "gear" and not detail)
     local entry = entries[index]
     local point = nearest(entry)
     ui.detailTitle:SetText(entry and entry.title or tabs[tab].label)
     ui.detail:SetText(entry and (entry.description or entry.subtitle) or ui.emptyText)
-    ui.coords:SetText(point and ("%s · %.1f, %.1f"):format(Data.ZoneName(point.mapID), point.x, point.y) or "")
+    local role = point and Pins.Label(point.stage)
+    ui.coords:SetText(point and ("%s · %.1f, %.1f"):format(role or Data.ZoneName(point.mapID), point.x, point.y) or "")
     ui.waypoint:SetEnabled(point ~= nil)
     ui.status:SetText(message or ui.contextStatus or "")
-    ZoneMap.Draw(ui.map, zone, entries, index, tabs[tab].key)
+    local mapZone = entry and entry.mapZone or zone
+    local quest = (detail and detail.quest) or (entry and entry.quest)
+    local highlighted
+    if quest then
+        highlighted = Pins.Points(quest, mapZone)
+        if detail and point then
+            -- Draw the focused location first when several objectives share a map cell.
+            table.insert(highlighted, 1, point)
+        end
+    end
+    ZoneMap.Draw(ui.map, mapZone, entries, index, tabs[tab].key, highlighted)
 end
 
 render = function(preserve)
@@ -86,9 +109,12 @@ render = function(preserve)
     ui.context:SetText(L.PLAYER_CONTEXT:format(player.level, UnitName("player"), className or ""))
     if tint then ui.context:SetTextColor(tint.r, tint.g, tint.b) end
     ui.source:SetText((category == "quests" or category == "gear") and (Data.source or "") or "GatherLite")
-    ui.listTitle:SetText(detail and detail.title or tabs[tab].label)
+    local browsingQuests = category == "quests" and not detail
+    ui.listTitle:SetText(detail and detail.title or (browsingQuests and activeOnly and L.ACTIVE_QUESTS or tabs[tab].label))
     ui.back:SetShown(detail ~= nil)
-    ui.filter:SetShown(category == "quests" and not detail)
+    ui.questMode:SetShown(browsingQuests)
+    ui.questMode:SetText(activeOnly and L.AVAILABLE_QUESTS or L.ACTIVE_QUESTS)
+    ui.filter:SetShown(browsingQuests and not activeOnly)
     ui.filter:SetText(settings.showTrivial and L.SHOWING_TRIVIAL or L.HIDING_TRIVIAL)
     ui.contextStatus = nil
     ui.emptyText = L.EMPTY_CATALOG
@@ -101,26 +127,28 @@ render = function(preserve)
     if not zone then
         ui.emptyText = L.NO_PLAYER_ZONE
     elseif detail then
-        entries = detail.quest and Entries.Quest(detail.quest) or Entries.Item(detail.item, zone)
+        entries = Entries.Quest(detail.quest, zone)
         ui.emptyText = L.QUEST_NO_DETAILS
     elseif category == "quests" or category == "gear" then
         if not Data.ready then
             ui.emptyText = L.LOADING
         else
-            local quests = Data.ZoneQuests(zone, player, category == "quests" and not settings.showTrivial)
+            local mode
+            if category == "gear" then mode = "both" elseif activeOnly then mode = "active" end
+            local quests = Data.ZoneQuests(zone, player, category == "quests" and not settings.showTrivial, mode)
             if category == "quests" then
                 entries = Entries.Quests(quests, zone)
-                ui.emptyText = L.EMPTY_AVAILABLE
-                ui.contextStatus = Data.IsNative() and L.STATUS_NATIVE_SOURCE or L.QUEST_ORDER
+                ui.emptyText = activeOnly and L.EMPTY_ACTIVE or L.EMPTY_AVAILABLE
+                ui.contextStatus = Data.IsNative() and L.STATUS_NATIVE_SOURCE or (activeOnly and L.ACTIVE_QUESTS or L.QUEST_ORDER)
             else
                 local waiting
                 entries, waiting = Entries.Gear(zone, player, quests)
                 ui.emptyText = L.EMPTY_GEAR
-                if waiting or not Data.gearReady then
+                if waiting then
                     ui.contextStatus = L.LOADING_EQUIPMENT
                     if #entries == 0 then ui.emptyText = ui.contextStatus end
                 else
-                    ui.contextStatus = L.GEAR_ORDER
+                    ui.contextStatus = L.GEAR_QUEST_ORDER
                 end
             end
         end
@@ -151,28 +179,59 @@ end
 local function back()
     local previous = table.remove(history)
     if not previous then close(); return end
-    detail, index, message = previous.detail, previous.index, nil
+    tab, detail, index, message = previous.tab, previous.detail, previous.index, nil
     render()
+end
+
+local function focusPoint(point)
+    for i, row in ipairs(entries) do
+        for _, candidate in ipairs(row.points or {}) do
+            if candidate.stage == point.stage and candidate.mapID == point.mapID
+                and candidate.x == point.x and candidate.y == point.y then
+                index = i
+                draw()
+                return
+            end
+        end
+    end
+end
+
+openQuest = function(quest, point)
+    if Data.Completed(quest.id) then return end
+    if not (ui and ui:IsShown()) then ForeverQuestGuide_Toggle() end
+    if not (ui and ui:IsShown()) then return end
+    if not detail or detail.quest.id ~= quest.id then
+        history[#history + 1] = { tab = tab, detail = detail, index = index }
+        local level = Data.Difficulty(quest, Data.Player())
+        tab, detail = 1, { title = Entries.QuestTitle(quest, level), quest = quest }
+        index, message = 1, nil
+        render()
+    end
+    if point then focusPoint(point) end
 end
 
 local function openDetails(entry)
     if not entry then return end
-    if entry.quest or entry.item then
-        history[#history + 1] = { detail = detail, index = index }
-        detail = { title = entry.title, quest = entry.quest, item = entry.item }
-        index, message = 1, nil
-        render()
+    if entry.quest then
+        openQuest(entry.quest)
     else
         mark(nearest(entry))
     end
 end
 
-local function toggleFilter()
+local function toggleQuestMode()
     if tabs[tab].key ~= "quests" or detail then return end
+    activeOnly, index, message = not activeOnly, 1, nil
+    render()
+end
+
+local function toggleFilter()
+    if tabs[tab].key ~= "quests" or detail or activeOnly then return end
     local settings = Guide.Character.Settings()
     settings.showTrivial = not settings.showTrivial
     message = nil
     render(true)
+    queueRefresh()
 end
 
 local function moveFocus(offset)
@@ -192,6 +251,7 @@ local function onPad(_, key)
     elseif key == "PAD2" then back()
     elseif key == "PAD3" then mark(nearest(entries[index]))
     elseif key == "PAD4" then toggleFilter()
+    elseif key == "PADRSTICK" then toggleQuestMode()
     end
 end
 
@@ -201,6 +261,7 @@ local function checkZone()
         zone, index, detail, history, message = detected, 1, nil, {}, nil
         Native.Invalidate()
         if ui and ui:IsShown() then render() end
+        queueRefresh()
     end
 end
 
@@ -213,7 +274,12 @@ end
 
 local function build()
     ui = View.Create(tabs, {
-        close = close, back = back, tab = selectTab, filter = toggleFilter,
+        close = close, back = back, tab = selectTab, filter = toggleFilter, questMode = toggleQuestMode,
+        questLink = function(position)
+            index = position
+            local entry = entries[position]
+            if entry and entry.quest then openQuest(entry.quest) end
+        end,
         row = function(position)
             if position == index then
                 openDetails(entries[index])
@@ -224,8 +290,16 @@ local function build()
         end,
         page = function(offset) moveFocus(offset * View.pageSize) end,
         pin = function(position, point, button)
-            index, message = position, nil
-            if button == "RightButton" then mark(point) else draw() end
+            local entry = entries[position]
+            if button == "LeftButton" and detail and point.stage then
+                focusPoint(point)
+            elseif button == "LeftButton" and entry and entry.quest then
+                index = position
+                openQuest(entry.quest, point)
+            else
+                index, message = position, nil
+                if button == "RightButton" then mark(point) else draw() end
+            end
         end,
         mark = function() mark(nearest(entries[index])) end,
     })
@@ -262,7 +336,7 @@ local function build()
         if elapsed < .5 then return end
         elapsed = 0
         checkZone()
-        ZoneMap.UpdatePlayer(ui.map, zone)
+        ZoneMap.UpdatePlayer(ui.map, ui.map.zone)
     end)
     local function fit()
         ui:SetScale(math.min(1, (UIParent:GetWidth() - 24) / 820, (UIParent:GetHeight() - 24) / 608))
@@ -281,6 +355,7 @@ function ForeverQuestGuide_Toggle()
     if ui and ui:IsShown() then close(); return end
     if InCombatLockdown() then return end
     if not ui then build() end
+    ui.map.zone = false
     zone, detail, history, index, message = playerZone(), nil, {}, 1, nil
     Native.Invalidate()
     ui:Show()
@@ -289,8 +364,17 @@ function ForeverQuestGuide_Toggle()
 end
 
 SLASH_FOREVERQUESTGUIDE1 = "/fqg"
-SlashCmdList.FOREVERQUESTGUIDE = ForeverQuestGuide_Toggle
-Guide.Gear.OnChanged = queueRefresh
+SlashCmdList.FOREVERQUESTGUIDE = function(command)
+    if (command or ""):lower():match("^%s*minimap%s*$") then
+        local settings = Guide.Character.Settings()
+        settings.hideMinimap = not settings.hideMinimap
+        print(settings.hideMinimap and L.MINIMAP_HIDDEN or L.MINIMAP_VISIBLE)
+        queueRefresh()
+    else
+        ForeverQuestGuide_Toggle()
+    end
+end
+Guide.Gear.OnChanged = function() queueRefresh(true) end
 
 local function attachLauncher()
     if launcher or not WorldMapFrame then return end
@@ -303,12 +387,14 @@ for _, event in ipairs({
     "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "ADDON_LOADED", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED",
     "QUEST_LOG_UPDATE", "QUEST_TURNED_IN", "QUEST_ACCEPTED", "QUEST_DATA_LOAD_RESULT", "PLAYER_LEVEL_UP",
     "SKILL_LINES_CHANGED", "SPELLS_CHANGED", "UPDATE_FACTION", "ITEM_DATA_LOAD_RESULT", "PLAYER_REGEN_DISABLED",
+    "MAP_EXPLORATION_UPDATED",
 }) do
     events:RegisterEvent(event)
 end
 events:SetScript("OnEvent", function(_, event, arg)
     if event == "PLAYER_LOGIN" then
         attachLauncher()
+        checkZone()
         C_Timer.After(1, prime)
     elseif event == "ADDON_LOADED" then
         if arg == "Blizzard_WorldMap" then attachLauncher() end
@@ -316,6 +402,11 @@ events:SetScript("OnEvent", function(_, event, arg)
         C_Timer.After(0, checkZone)
     elseif event == "PLAYER_REGEN_DISABLED" then
         if ui then close() end
+    elseif event == "MAP_EXPLORATION_UPDATED" then
+        if ui and ui:IsShown() then
+            ui.map.zone = false
+            render(true)
+        end
     elseif event == "ITEM_DATA_LOAD_RESULT" then
         Guide.Gear.Loaded(arg)
     elseif event == "QUEST_DATA_LOAD_RESULT" then

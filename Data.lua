@@ -9,7 +9,6 @@ local empty = {}
 local mapByArea = { [17] = 1413, [331] = 1440, [406] = 1442 }
 local quests, zones, itemsByQuest, startersByQuest = {}, {}, {}, {}
 local names, positions, itemSources, mapInfo = {}, {}, {}, {}
-local gearByZone, npcGearInfo = {}, {}
 local zoneCache = {}
 local questFields = {
     "name", "startedBy", "finishedBy", "requiredLevel", "questLevel", "requiredRaces", "requiredClasses",
@@ -113,9 +112,8 @@ local function addSpawns(list, spawns, label)
         if zone then
             for _, point in ipairs(points) do
                 local x, y = point[1], point[2]
-                if type(x) == "number" and type(y) == "number" and x >= 0 and y >= 0 and x <= 100 and y <= 100 then
+                if type(x) == "number" and type(y) == "number" and x >= 0 and y >= 0 and x <= 100 and y <= 100 and (x ~= 0 or y ~= 0) then
                     list[#list + 1] = { mapID = mapID, zone = zone, x = x, y = y, name = label }
-                    break
                 end
             end
         end
@@ -259,49 +257,6 @@ local function indexQuest(id)
     end
 end
 
-local function indexGear(id)
-    local classID = Guide.Gear.Instant(id)
-    if not classID then return end
-    local fields = database.Item.GetAll(id, sourceFields)
-    if not fields then return end
-    local function add(kind, sourceIDs, labelKey)
-        for _, sourceID in ipairs(sourceIDs or empty) do
-            local info
-            if kind == "Npc" then
-                info = npcGearInfo[sourceID]
-                if not info then
-                    info = database.Npc.GetAll(sourceID, { "minLevel", "friendlyToFaction" }) or empty
-                    npcGearInfo[sourceID] = info
-                end
-            end
-            for _, point in ipairs(entityPoints(kind, sourceID)) do
-                local zoneItems = gearByZone[point.zone]
-                if not zoneItems then
-                    zoneItems = {}
-                    gearByZone[point.zone] = zoneItems
-                end
-                local sources = zoneItems[id]
-                if not sources then
-                    sources = {}
-                    zoneItems[id] = sources
-                end
-                sources[#sources + 1] = {
-                    point = point, labelKey = labelKey,
-                    level = labelKey == "ITEM_DROPPED_BY" and info and info[1],
-                    faction = labelKey == "ITEM_SOLD_BY" and info and info[2],
-                }
-            end
-        end
-    end
-    add("Npc", fields[1], "ITEM_DROPPED_BY")
-    add("Object", fields[2], "ITEM_LOOTED_FROM")
-    add("Npc", fields[4], "ITEM_SOLD_BY")
-end
-
-function Data.ZoneGear(mapID)
-    return gearByZone[mapID] or empty
-end
-
 local function indexItem(id)
     local fields = database.Item.GetAll(id, itemFields)
     if not fields then return end
@@ -316,7 +271,7 @@ function Data.Start(onReady)
     database, Data.source = Guide.Sources.Catalog()
     if not database then
         Data.source = L.SOURCE_NATIVE
-        Data.ready, Data.gearReady = true, true
+        Data.ready = true
         onReady()
         return
     end
@@ -325,14 +280,12 @@ function Data.Start(onReady)
     local stages = {
         { itemIDs, indexItem },
         { database.Quest.GetAllIds(), indexQuest },
-        { itemIDs, indexGear },
     }
     local stageIndex, cursor, ids = 1, 1
     local function advance()
         local stage = stages[stageIndex]
         if not stage then
             Data.ready = true
-            Data.gearReady = true
             onReady()
             return
         end
@@ -346,10 +299,6 @@ function Data.Start(onReady)
         end
         if cursor > #ids then
             stageIndex, cursor = stageIndex + 1, 1
-            if stageIndex == 3 then
-                Data.ready = true
-                onReady()
-            end
         end
         C_Timer.After(0, advance)
     end
@@ -481,16 +430,17 @@ function Data.Difficulty(quest, player)
     return level, .6, .6, .6
 end
 
-function Data.ZoneQuests(mapID, player, hideTrivial)
+function Data.ZoneQuests(mapID, player, hideTrivial, mode)
     local result = {}
     for _, quest in ipairs(Data.Zone(mapID)) do
         local area = quest.areas[mapID]
         local status, label = Data.Status(quest, player)
-        local visible = area.start and (status == "possible" or status == "starter")
-        if visible then
+        local active = status == "active"
+        local available = area.start and (status == "possible" or status == "starter")
+        if (active and mode ~= nil) or (available and mode ~= "active") then
             local level, r, g, b = Data.Difficulty(quest, player)
             local trivial = quest.level and quest.level > 0 and math.max(r,g,b) - math.min(r,g,b) < .08
-            if not (hideTrivial and trivial) then
+            if active or not (hideTrivial and trivial) then
                 result[#result + 1] = { quest = quest, status = status, label = label, level = level, r = r, g = g, b = b }
             end
         end

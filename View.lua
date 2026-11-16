@@ -82,7 +82,7 @@ local function tabButton(parent, tab, index, selectTab)
     return control
 end
 
-local function rowButton(parent, index, selectRow)
+local function rowButton(parent, index, selectRow, openQuest)
     local row = CreateFrame("Button", nil, parent)
     row:SetSize(378, 43)
     row:SetPoint("TOPLEFT", 7, -30 - (index - 1) * 44)
@@ -112,6 +112,14 @@ local function rowButton(parent, index, selectRow)
     row.title = font(row, "GameFontHighlight", "TOPLEFT", 48, -6, 321)
     row.subtitle = font(row, "GameFontDisableSmall", "BOTTOMLEFT", 48, 6, 321)
     row.subtitle:SetTextColor(.76, .72, .64)
+    row.questLink = CreateFrame("Button", nil, row)
+    row.questLink:SetSize(321, 18)
+    row.questLink:SetPoint("BOTTOMLEFT", 48, 2)
+    row.questLink.label = font(row.questLink, "GameFontHighlightSmall", "LEFT", 0, 0, 321)
+    row.questLink.label:SetTextColor(.98, .79, .36)
+    row.questLink:SetHighlightTexture("Interface\\Buttons\\UI-Listbox-Highlight2", "ADD")
+    row.questLink:SetScript("OnClick", function() openQuest(row.index) end)
+    row.questLink:Hide()
     row:SetScript("OnClick", function(self) selectRow(self.index, true) end)
     return row
 end
@@ -164,7 +172,7 @@ function View.Create(tabs, actions)
     ui.listTitle = font(list, "GameFontNormal", "TOPLEFT", 14, -10, 318)
     ui.count = font(list, "GameFontHighlightSmall", "TOPRIGHT", -14, -11)
     ui.rows = {}
-    for i = 1, View.pageSize do ui.rows[i] = rowButton(list, i, actions.row) end
+    for i = 1, View.pageSize do ui.rows[i] = rowButton(list, i, actions.row, actions.questLink) end
     ui.prev = View.Button(list, "<", 27, 21, "BOTTOM", -57, 10, function() actions.page(-1) end)
     ui.next = View.Button(list, ">", 27, 21, "BOTTOM", 57, 10, function() actions.page(1) end)
     ui.page = font(list, "GameFontHighlightSmall", "BOTTOM", 0, 15)
@@ -189,16 +197,17 @@ function View.Create(tabs, actions)
     ui.waypoint = View.Button(detail, L.MARK, 110, 24, "BOTTOMRIGHT", -11, 9, actions.mark)
 
     ui.filter = View.Button(ui, "", 174, 24, "BOTTOMRIGHT", -16, 31, actions.filter)
-    ui.status = font(ui, "GameFontHighlightSmall", "BOTTOMLEFT", 17, 37, 590)
+    ui.questMode = View.Button(ui, "", 130, 24, "BOTTOMRIGHT", -196, 31, actions.questMode)
+    ui.status = font(ui, "GameFontHighlightSmall", "BOTTOMLEFT", 17, 37, 470)
     ui.status:SetTextColor(.81, .76, .65)
     rule(ui, "BOTTOMLEFT", 17, 27, 785)
     local hint = font(ui, "GameFontHighlightSmall", "BOTTOMLEFT", 17, 8, 786)
-    hint:SetText(L.PAD_GUIDE)
+    hint:SetText(L.PAD_GUIDE_V2)
     hint:SetJustifyH("CENTER")
     return ui
 end
 
-function View.Rows(ui, entries, index)
+function View.Rows(ui, entries, index, showQuestLinks)
     local size, total = View.pageSize, #entries
     local page, pages = math.floor((index - 1) / size) + 1, math.max(1, math.ceil(total / size))
     local first = (page - 1) * size + 1
@@ -212,7 +221,11 @@ function View.Rows(ui, entries, index)
             row.title:SetText(entry.title)
             local color = entry.tint
             row.title:SetTextColor(color and color.r or 1, color and color.g or .88, color and color.b or .66)
+            local questLink = showQuestLinks and entry.quest
+            row.subtitle:SetShown(not questLink)
             row.subtitle:SetText(entry.subtitle or "")
+            row.questLink:SetShown(not not questLink)
+            if questLink then row.questLink.label:SetText(entry.subtitle) end
             row.icon:SetTexture(entry.icon)
             row.icon:SetShown(entry.icon ~= nil)
             row.iconRim:SetShown(entry.icon ~= nil)

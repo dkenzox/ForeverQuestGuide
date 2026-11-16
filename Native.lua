@@ -74,7 +74,8 @@ function Native.Map(zone)
     for _, pin in ipairs(data.GetQuestsOnMap and data.GetQuestsOnMap(zone) or empty) do
         local id, pinMap = pin.questID, pin.mapID or zone
         if type(id) == "number" and id > 0 and Guide.Data.ZoneForMap(pinMap) == zone then
-            local relation = pin.isQuestStart and "start" or "objective"
+            local ready = data.ReadyForTurnIn and data.ReadyForTurnIn(id)
+            local relation = pin.isQuestStart and "start" or (ready and "finish" or "objective")
             inMap(get(id), zone, relation, pinMap, pin.x, pin.y)
         end
     end
@@ -85,10 +86,12 @@ function Native.Map(zone)
             local info = data.GetInfo(index)
             if info and not info.isHeader and type(info.questID) == "number" and info.questID > 0 then
                 local map, x, y = data.GetNextWaypoint(info.questID)
+                local ready = data.ReadyForTurnIn and data.ReadyForTurnIn(info.questID)
+                local relation = ready and "finish" or "objective"
                 if map and Guide.Data.ZoneForMap(map) == zone then
-                    inMap(get(info.questID, info.title, info.level), zone, "objective", map, x, y)
+                    inMap(get(info.questID, info.title, info.level), zone, relation, map, x, y)
                 elseif data.GetQuestUiMapID and Guide.Data.ZoneForMap(data.GetQuestUiMapID(info.questID)) == zone then
-                    inMap(get(info.questID, info.title, info.level), zone, "objective", zone)
+                    inMap(get(info.questID, info.title, info.level), zone, relation, zone)
                 end
             end
         end

@@ -12,12 +12,14 @@ La interfaz se muestra en español en clientes esES y esMX. El resto usa inglés
 
 ## Datos del atlas
 
-- **Misiones.** Inicios de la zona que cumplen los requisitos conocidos del personaje, ordenados por nivel. Se excluyen misiones completadas, en curso y bloqueadas. El filtro de grises se guarda por personaje. La ficha muestra iniciadores, objetivos, entregas y recompensas registradas.
-- **Equipo.** Armas y armaduras equipables, con icono, ranura, tipo y nivel de objeto. Incluye recompensas de misiones disponibles, botín identificado y vendedores del catálogo. Filtra por nivel requerido, tipo de armadura y, cuando los datos lo indican, facción del vendedor y nivel de la criatura de origen. La ficha del objeto del cliente muestra sus restricciones particulares.
+- **Misiones.** Los inicios disponibles se ordenan por nivel. **En curso** muestra las misiones activas con ubicaciones en la zona. Se excluyen las misiones completadas y bloqueadas. El filtro de grises se guarda por personaje. Al seleccionar una misión, el mapa marca dónde aceptarla (**!**), dónde completar objetivos (**×**) y dónde entregarla (**?**). La ficha permite enfocar las ubicaciones de cada objetivo, incluso si están en otra zona.
+- **Equipo de misiones.** Recompensas equipables de las misiones disponibles y en curso. Debajo de cada objeto aparece su misión. Hacé clic en ese nombre o pulsá A con el objeto enfocado para abrir la ficha en Misiones. Los objetos muestran icono, ranura, tipo y nivel. El filtro tiene en cuenta el nivel requerido y el tipo de armadura.
 - **Minería y herboristería.** Posibles ubicaciones con el requisito del recurso y la habilidad actual del personaje. **GatherLite** es una dependencia opcional. Si está instalado, la guía agrega sus puntos disponibles para el mapa actual. También incluye ubicaciones de referencia.
 - **Pesca.** Especies y zonas de captura reportadas. Algunos peces tienen registro por zona sin coordenadas. Si GatherLite tiene bancos registrados, también aparecen en el atlas. Las capturas dependen de la habilidad y del lugar exacto donde pesques.
 
 Para misiones y equipo, la guía usa **QuestieDB** (contrato 3), **NorgannonDB** (esquema 1.2 o posterior de la serie 1.x) o los datos nativos, en ese orden. El modo nativo se limita a lo que el cliente muestra en el mapa y a recompensas conocidas. Eventos, rotaciones, reputaciones y restricciones específicas pueden variar según los datos disponibles. Los puntos de recolección son ubicaciones posibles.
+
+El mapa usa las texturas de las zonas exploradas que provee el cliente. Si el mapa mundial ya muestra la misma zona revelada por un addon de mapas, la guía también usa esas texturas. Los marcadores del minimapa usan HereBeDragons, incluido en GatherLite y Questie. Podés activarlos o desactivarlos con **/fqg minimap** si ya usás otros pines. En el minimapa se muestran los inicios disponibles y los objetivos y entregas de misiones activas.
 
 ## Mando y ratón
 
@@ -30,8 +32,9 @@ Para misiones y equipo, la guía usa **QuestieDB** (contrato 3), **NorgannonDB**
 | B / ○ | Volver o cerrar |
 | X / □ | Marcar la ubicación más cercana de la selección |
 | Y / △ | Mostrar u ocultar misiones grises |
+| R3 | Alternar entre misiones disponibles y en curso |
 
-Podés asignar un botón o combinación libre para abrir la guía desde las asignaciones del juego. Con el ratón, un clic enfoca una fila y el siguiente abre su ficha. Un clic en el mapa enfoca el resultado y el clic derecho marca ese punto. En mapas que admiten marcadores personales, **Marcar punto** coloca el marcador del cliente. La guía se cierra al entrar en combate.
+Podés asignar un botón o combinación libre para abrir la guía desde las asignaciones del juego. Con el ratón, un clic enfoca una fila y el siguiente abre su ficha. Un clic en un pin de misión abre la ficha y selecciona la ubicación. El clic derecho marca ese punto. En mapas que admiten marcadores personales, **Marcar punto** coloca el marcador del cliente. La guía se cierra al entrar en combate.
 
 ## Estructura
 

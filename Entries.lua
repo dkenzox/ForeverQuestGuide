@@ -1,117 +1,101 @@
 local _, Guide = ...
-local Data, Gear, L = Guide.Data, Guide.Gear, Guide.Locale
+local Data, Gear, L, Pins = Guide.Data, Guide.Gear, Guide.Locale, Guide.QuestPins
 local Entries = {}
 Guide.Entries = Entries
 
-local function collect(list, sources, zone)
-    for _, source in ipairs(sources) do
-        for _, point in ipairs(source.points) do
-            if point.zone == zone then list[#list + 1] = point end
-        end
-    end
-end
-
-local function questPoints(quest, zone)
-    local points = {}
-    collect(points, quest.givers, zone)
-    return points
+function Entries.QuestTitle(quest, level)
+    return quest.level and ("[%d] %s"):format(level, quest.name) or quest.name
 end
 
 function Entries.Quests(quests, zone)
     local entries = {}
     for _, result in ipairs(quests) do
         local quest = result.quest
-        local title = quest.level and ("[%d] %s"):format(result.level, quest.name) or quest.name
-        local points = questPoints(quest, zone)
+        local active = result.status == "active"
+        local points = Pins.Points(quest, zone, active and "objective" or "start")
+        if active and #points == 0 then points = Pins.Points(quest, zone, "finish") end
         local lines = table.concat(quest.lines, "\n")
+        local subtitle = active and L.STATUS_ACTIVE or (#quest.starterItems > 0 and L.RELATION_ITEM or L.RELATION_START)
+        if points[1] and points[1].name then subtitle = subtitle .. " · " .. points[1].name end
         entries[#entries + 1] = {
-            key = quest.id, title = title, quest = quest, points = points,
-            subtitle = #quest.starterItems > 0 and L.RELATION_ITEM or L.RELATION_START,
-            description = lines ~= "" and lines or (points[1] and (L.QUEST_GIVER .. " · " .. (points[1].name or L.NATIVE_START))),
+            key = quest.id, title = Entries.QuestTitle(quest, result.level), quest = quest, points = points,
+            subtitle = subtitle, description = lines ~= "" and lines or subtitle,
             icon = Guide.View.icons.quests, tint = {r = result.r, g = result.g, b = result.b},
         }
     end
     return entries
 end
 
-local function addLocations(entries, sources, label)
+local function addLocations(entries, sources, stage, localZone)
+    local role = Pins.Label(stage)
     for _, source in ipairs(sources) do
-        local kind = source.labelKey and L[source.labelKey] or label
-        if #source.points == 0 then
-            entries[#entries + 1] = { title = source.name, subtitle = kind .. " · " .. L.NO_COORDINATES }
-        else
-            for _, point in ipairs(source.points) do
-                entries[#entries + 1] = {
-                    title = source.name, subtitle = kind .. " · " .. Data.ZoneName(point.mapID),
-                    points = { point },
-                }
+        local kind = source.labelKey and L[source.labelKey]
+        local label = kind and (role .. " · " .. kind) or role
+        local byZone, zoneIDs = {}, {}
+        for _, point in ipairs(source.points) do
+            local group = byZone[point.zone]
+            if not group then
+                group = {}
+                byZone[point.zone] = group
+                zoneIDs[#zoneIDs + 1] = point.zone
             end
+            group[#group + 1] = Pins.Point(point, stage)
+        end
+        table.sort(zoneIDs, function(a, b)
+            if (a == localZone) ~= (b == localZone) then return a == localZone end
+            return a < b
+        end)
+        if #zoneIDs == 0 then
+            entries[#entries + 1] = { title = source.name, subtitle = label .. " · " .. L.NO_COORDINATES }
+        end
+        for _, zone in ipairs(zoneIDs) do
+            local points = byZone[zone]
+            entries[#entries + 1] = {
+                title = source.name, subtitle = label .. " · " .. Data.ZoneName(zone),
+                description = label .. "\n" .. L.LOCATION_COUNT:format(#points), points = points, mapZone = zone,
+            }
         end
     end
 end
 
-function Entries.Quest(quest)
+function Entries.Quest(quest, zone)
     local entries = {}
-    addLocations(entries, quest.givers, L.QUEST_GIVER)
+    local first = Data.OnQuest(quest.id) and "objective" or "start"
+    if C_QuestLog.ReadyForTurnIn and C_QuestLog.ReadyForTurnIn(quest.id) then first = "finish" end
+    for _, stage in ipairs(Pins.stages) do
+        if stage.key == first then addLocations(entries, quest[stage.field], first, zone) end
+    end
+    for _, stage in ipairs(Pins.stages) do
+        if stage.key ~= first then addLocations(entries, quest[stage.field], stage.key, zone) end
+    end
     for _, id in ipairs(quest.starterItems) do
         entries[#entries + 1] = { title = Data.ItemName(id), subtitle = L.QUEST_STARTING_ITEM, itemID = id }
     end
     for _, line in ipairs(quest.lines) do
         entries[#entries + 1] = { title = line, subtitle = L.QUEST_OBJECTIVE, description = line }
     end
-    addLocations(entries, quest.objectives, L.QUEST_OBJECTIVE)
-    addLocations(entries, quest.finishers, L.QUEST_FINISHER)
     for _, reward in ipairs(Data.Rewards(quest.id)) do
         local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(reward.id)
-        entries[#entries + 1] = {
-            title = reward.name, subtitle = reward.kind, icon = icon, itemID = reward.id,
-        }
+        entries[#entries + 1] = { title = reward.name, subtitle = reward.kind, icon = icon, itemID = reward.id }
     end
     return entries
 end
 
 function Entries.Gear(zone, player, quests)
-    local items, waiting = Gear.Zone(zone, player, quests)
+    local items, waiting = Gear.Zone(player, quests)
     local entries = {}
     for _, item in ipairs(items) do
-        local points = {}
-        for _, source in ipairs(item.sources) do
-            if source.quest then
-                collect(points, source.quest.givers, zone)
-            else
-                points[#points + 1] = source.point
-            end
-        end
-        local source = item.sources[1]
-        local origin = source.quest and source.quest.name or source.point.name
+        local level = Data.Difficulty(item.quest, player)
         entries[#entries + 1] = {
-            key = item.id, title = item.name, item = item, points = points, itemID = item.id, icon = item.icon, tint = item.tint,
-            subtitle = item.typeName .. " · " .. L.ITEM_LEVEL:format(item.itemLevel),
-            description = origin .. "\n" .. L.REQUIRED_ITEM_LEVEL:format(item.level),
+            key = item.quest.id .. ":" .. item.id,
+            title = item.name, quest = item.quest, points = Pins.Points(item.quest, zone, "start"),
+            itemID = item.id, icon = item.icon, tint = item.tint,
+            subtitle = Entries.QuestTitle(item.quest, level),
+            description = item.typeName .. " · " .. L.ITEM_LEVEL:format(item.itemLevel)
+                .. "\n" .. item.reward.kind .. " · " .. L.REQUIRED_ITEM_LEVEL:format(item.level),
         }
     end
     return entries, waiting
-end
-
-function Entries.Item(item, zone)
-    local entries = {}
-    local seen = {}
-    for _, source in ipairs(item.sources) do
-        if source.quest then
-            entries[#entries + 1] = {
-                title = source.quest.name, subtitle = source.subtitle,
-                quest = source.quest, points = questPoints(source.quest, zone), icon = Guide.View.icons.quests,
-            }
-        else
-            local point = source.point
-            local key = ("%s:%s:%d:%.2f:%.2f"):format(source.labelKey, point.name, point.mapID, point.x, point.y)
-            if not seen[key] then
-                seen[key] = true
-                entries[#entries + 1] = { title = point.name, subtitle = L[source.labelKey], points = { point } }
-            end
-        end
-    end
-    return entries
 end
 
 function Entries.Resources(zone, kind)
