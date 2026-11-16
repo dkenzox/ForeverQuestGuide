@@ -182,6 +182,7 @@ function View.Create(tabs, actions)
     end
     ui.rows = {}
     for i = 1, View.pageSize do ui.rows[i] = rowButton(list, i, actions.row, actions.questLink) end
+    ui.rewardSheet = Guide.RewardView.Create(list, actions.reward)
     ui.prev = View.Button(list, "<", 27, 21, "BOTTOM", -57, 10, function() actions.page(-1) end)
     ui.next = View.Button(list, ">", 27, 21, "BOTTOM", 57, 10, function() actions.page(1) end)
     ui.page = font(list, "GameFontHighlightSmall", "BOTTOM", 0, 15)
@@ -223,7 +224,18 @@ function View.Rows(ui, entries, index, showQuestLinks, section)
         button:SetShown(section ~= nil)
         button:SetEnabled(key ~= section)
     end
-    ui.hint:SetText(section and L.PAD_DETAIL or L.PAD_GUIDE_V3)
+    local rewards = section == "rewards"
+    ui.rewardSheet:SetShown(rewards)
+    ui.hint:SetText(rewards and L.PAD_REWARDS or (section and L.PAD_DETAIL or L.PAD_GUIDE_V3))
+    if rewards then
+        for _, row in ipairs(ui.rows) do row:Hide() end
+        local page, pages = Guide.RewardView.Draw(ui.rewardSheet, entries, index)
+        ui.count:SetText(total > 0 and total or "")
+        ui.page:SetText(("%d / %d"):format(page, pages))
+        ui.prev:SetEnabled(page > 1)
+        ui.next:SetEnabled(page < pages)
+        return
+    end
     local page, pages = math.floor((index - 1) / size) + 1, math.max(1, math.ceil(total / size))
     local first = (page - 1) * size + 1
     for i, row in ipairs(ui.rows) do

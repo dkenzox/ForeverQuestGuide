@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4
+
+- La ficha de recompensas usa pergamino, iconos de objeto y grupos para recompensas a elección, garantizadas y registradas.
+- El dinero y la experiencia tienen su propia línea. A abre la descripción del objeto seleccionado con mando.
+
 ## 0.2.3
 
 - Símbolos de inicio, objetivo y entrega centrados en sus pines.

@@ -87,13 +87,24 @@ function Entries.Quest(quest, zone, section)
         addLocations(entries, quest.finishers, section, zone)
     else
         local _, xp, money, items = Rewards.Summary(quest)
-        entries[1] = { title = xp .. "  ·  " .. money, subtitle = L.QUEST_REWARDS }
-        for _, reward in ipairs(items) do
-            local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(reward.id)
-            entries[#entries + 1] = {
-                title = reward.name .. (reward.count > 1 and (" ×" .. reward.count) or ""),
-                subtitle = reward.kind, icon = icon, itemID = reward.id,
-            }
+        entries.totals = money .. "  ·  " .. xp
+        local groups = {
+            { L.REWARD_CHOICE, L.REWARD_CHOOSE_ONE },
+            { L.REWARD_GUARANTEED, L.REWARD_ALSO_RECEIVE },
+            { L.REWARD_RECORDED, L.REWARD_KNOWN_ITEMS },
+        }
+        for _, group in ipairs(groups) do
+            for _, reward in ipairs(items) do
+                if reward.kind == group[1] then
+                    local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(reward.id)
+                    local quality = C_Item and C_Item.GetItemQualityByID and C_Item.GetItemQualityByID(reward.id)
+                    entries[#entries + 1] = {
+                        key = reward.id, title = reward.name, subtitle = reward.kind, heading = group[2],
+                        icon = icon, itemID = reward.id, quantity = reward.count,
+                        tint = quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality],
+                    }
+                end
+            end
         end
     end
     return entries

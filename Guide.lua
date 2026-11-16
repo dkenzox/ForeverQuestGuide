@@ -111,8 +111,9 @@ draw = function()
     View.Rows(ui, entries, index, tabs[tab].key == "gear" and not detail, detail and detail.section)
     local entry = entries[index]
     local point = nearest(entry)
-    ui.detailTitle:SetText(entry and entry.title or tabs[tab].label)
-    ui.detail:SetText(entry and (entry.description or entry.subtitle) or ui.emptyText)
+    local rewardSection = detail and detail.section == "rewards"
+    ui.detailTitle:SetText(entry and entry.title or (rewardSection and L.QUEST_REWARDS or tabs[tab].label))
+    ui.detail:SetText(entry and (entry.description or entry.subtitle) or (rewardSection and L.NO_ITEM_REWARDS or ui.emptyText))
     local role = point and Pins.Label(point.stage)
     ui.coords:SetText(point and ("%s · %.1f, %.1f"):format(role or Data.ZoneName(point.mapID), point.x, point.y) or "")
     ui.waypoint:SetEnabled(point ~= nil)
@@ -289,6 +290,15 @@ local function moveFocus(offset)
     draw()
 end
 
+local function changePage(offset)
+    if detail and detail.section == "rewards" then
+        local target = offset < 0 and ui.rewardSheet.previous or (offset > 0 and ui.rewardSheet.next)
+        if target then moveFocus(target - index) end
+    else
+        moveFocus(offset * pageSize())
+    end
+end
+
 local function onPad(_, key)
     if key == "PADDUP" then moveFocus(-1)
     elseif key == "PADDDOWN" then moveFocus(1)
@@ -296,9 +306,11 @@ local function onPad(_, key)
     elseif key == "PADDRIGHT" and detail then stepSection(1)
     elseif key == "PADDLEFT" or key == "PADLSHOULDER" then selectTab((tab - 2) % #tabs + 1)
     elseif key == "PADDRIGHT" or key == "PADRSHOULDER" then selectTab(tab % #tabs + 1)
-    elseif key == "PADLTRIGGER" then moveFocus(-pageSize())
-    elseif key == "PADRTRIGGER" then moveFocus(pageSize())
-    elseif key == "PAD1" then openDetails(entries[index])
+    elseif key == "PADLTRIGGER" then changePage(-1)
+    elseif key == "PADRTRIGGER" then changePage(1)
+    elseif key == "PAD1" then
+        if detail and detail.section == "rewards" then Guide.RewardView.Tooltip(ui.rewardSheet.focused)
+        else openDetails(entries[index]) end
     elseif key == "PAD2" then back()
     elseif key == "PAD3" then mark(nearest(entries[index]))
     elseif key == "PADLSTICK" then clearWaypoint()
@@ -341,7 +353,12 @@ local function build()
                 draw()
             end
         end,
-        page = function(offset) moveFocus(offset * pageSize()) end,
+        page = changePage,
+        reward = function(position)
+            index = position
+            draw()
+            Guide.RewardView.Tooltip(ui.rewardSheet.focused)
+        end,
         pin = function(position, point, button)
             local entry = entries[position]
             if button == "LeftButton" and detail and point.stage then
