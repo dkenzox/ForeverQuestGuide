@@ -1,5 +1,6 @@
 local _, Guide = ...
 local Data, Gear, L, Pins = Guide.Data, Guide.Gear, Guide.Locale, Guide.QuestPins
+local Rewards = Guide.Rewards
 local Entries = {}
 Guide.Entries = Entries
 
@@ -19,7 +20,7 @@ function Entries.Quests(quests, zone)
         if points[1] and points[1].name then subtitle = subtitle .. " · " .. points[1].name end
         entries[#entries + 1] = {
             key = quest.id, title = Entries.QuestTitle(quest, result.level), quest = quest, points = points,
-            subtitle = subtitle, description = lines ~= "" and lines or subtitle,
+            subtitle = subtitle, summary = Rewards.Summary(quest), description = lines ~= "" and lines or subtitle,
             icon = Guide.View.icons.quests, tint = {r = result.r, g = result.g, b = result.b},
         }
     end
@@ -58,25 +59,36 @@ local function addLocations(entries, sources, stage, localZone)
     end
 end
 
-function Entries.Quest(quest, zone)
+function Entries.Quest(quest, zone, section)
     local entries = {}
-    local first = Data.OnQuest(quest.id) and "objective" or "start"
-    if C_QuestLog.ReadyForTurnIn and C_QuestLog.ReadyForTurnIn(quest.id) then first = "finish" end
-    for _, stage in ipairs(Pins.stages) do
-        if stage.key == first then addLocations(entries, quest[stage.field], first, zone) end
-    end
-    for _, stage in ipairs(Pins.stages) do
-        if stage.key ~= first then addLocations(entries, quest[stage.field], stage.key, zone) end
-    end
-    for _, id in ipairs(quest.starterItems) do
-        entries[#entries + 1] = { title = Data.ItemName(id), subtitle = L.QUEST_STARTING_ITEM, itemID = id }
-    end
-    for _, line in ipairs(quest.lines) do
-        entries[#entries + 1] = { title = line, subtitle = L.QUEST_OBJECTIVE, description = line }
-    end
-    for _, reward in ipairs(Data.Rewards(quest.id)) do
-        local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(reward.id)
-        entries[#entries + 1] = { title = reward.name, subtitle = reward.kind, icon = icon, itemID = reward.id }
+    if section == "start" then
+        addLocations(entries, quest.givers, section, zone)
+        for _, id in ipairs(quest.starterItems) do
+            entries[#entries + 1] = { title = Data.ItemName(id), subtitle = L.QUEST_STARTING_ITEM, itemID = id }
+        end
+    elseif section == "objective" then
+        local live = Data.OnQuest(quest.id) and C_QuestLog.GetQuestObjectives and C_QuestLog.GetQuestObjectives(quest.id)
+        local lines = {}
+        for _, goal in ipairs(live or {}) do
+            if goal.text and goal.text ~= "" then lines[#lines + 1] = goal.text end
+        end
+        if #lines == 0 then lines = quest.lines end
+        for _, line in ipairs(lines) do
+            entries[#entries + 1] = { title = line, subtitle = L.QUEST_OBJECTIVE, description = line }
+        end
+        addLocations(entries, quest.objectives, section, zone)
+    elseif section == "finish" then
+        addLocations(entries, quest.finishers, section, zone)
+    else
+        local _, xp, money, items = Rewards.Summary(quest)
+        entries[1] = { title = xp .. "  ·  " .. money, subtitle = L.QUEST_REWARDS }
+        for _, reward in ipairs(items) do
+            local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(reward.id)
+            entries[#entries + 1] = {
+                title = reward.name .. (reward.count > 1 and (" ×" .. reward.count) or ""),
+                subtitle = reward.kind, icon = icon, itemID = reward.id,
+            }
+        end
     end
     return entries
 end
@@ -86,13 +98,16 @@ function Entries.Gear(zone, player, quests)
     local entries = {}
     for _, item in ipairs(items) do
         local level = Data.Difficulty(item.quest, player)
+        local itemType = item.typeName .. " · " .. L.ITEM_LEVEL:format(item.itemLevel)
+        local stats = Gear.Stats(item.link)
         entries[#entries + 1] = {
             key = item.quest.id .. ":" .. item.id,
             title = item.name, quest = item.quest, points = Pins.Points(item.quest, zone, "start"),
             itemID = item.id, icon = item.icon, tint = item.tint,
             subtitle = Entries.QuestTitle(item.quest, level),
-            description = item.typeName .. " · " .. L.ITEM_LEVEL:format(item.itemLevel)
-                .. "\n" .. item.reward.kind .. " · " .. L.REQUIRED_ITEM_LEVEL:format(item.level),
+            summary = itemType,
+            description = itemType .. "\n" .. item.reward.kind .. " · " .. L.REQUIRED_ITEM_LEVEL:format(item.level)
+                .. (stats and stats ~= "" and ("\n" .. stats) or ""),
         }
     end
     return entries, waiting

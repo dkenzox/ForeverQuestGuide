@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+- Pines redondos y espaciados. Los recursos llevan su icono en el mapa.
+- Equipo muestra tipo y nivel por fila, estadísticas al seleccionar y pines de la misión enfocada.
+- EXP, porcentaje del nivel, monedas y objetos en la lista de misiones. Fichas con secciones de inicio, objetivos, entrega y recompensas.
+- Botón de apertura en el minimapa y controles para borrar el waypoint activo.
+
 ## 0.2.1
 
 - Terreno explorado en el mapa del atlas y pines visibles de inicio, objetivos y entrega.

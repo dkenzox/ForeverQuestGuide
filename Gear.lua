@@ -6,6 +6,37 @@ local Data = Guide.Data
 local itemInfo = C_Item and C_Item.GetItemInfo or GetItemInfo
 local itemInstant = C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
 local pending, queue, cursor = {}, {}, 1
+local statsByLink = {}
+local quickStats = {
+    { "ITEM_MOD_DAMAGE_PER_SECOND_SHORT", "DPS" }, { "RESISTANCE0_NAME", "Armor" },
+    { "ITEM_MOD_ARMOR_SHORT", "Armor" }, { "ITEM_MOD_BLOCK_VALUE_SHORT", "Block" },
+    { "ITEM_MOD_STRENGTH_SHORT", "Str" }, { "ITEM_MOD_AGILITY_SHORT", "Agi" },
+    { "ITEM_MOD_STAMINA_SHORT", "Sta" }, { "ITEM_MOD_INTELLECT_SHORT", "Int" },
+    { "ITEM_MOD_SPIRIT_SHORT", "Spi" }, { "ITEM_MOD_ATTACK_POWER_SHORT", "AP" },
+    { "ITEM_MOD_SPELL_POWER_SHORT", "SP" }, { "ITEM_MOD_HEALING_DONE_SHORT", "Healing" },
+    { "ITEM_MOD_CRIT_RATING_SHORT", "Crit" }, { "ITEM_MOD_HIT_RATING_SHORT", "Hit" },
+    { "ITEM_MOD_DEFENSE_SKILL_RATING_SHORT", "Defense" },
+}
+
+function Gear.Stats(link)
+    if not link then return end
+    if statsByLink[link] ~= nil then return statsByLink[link] end
+    local api = C_Item and C_Item.GetItemStats or GetItemStats
+    local stats = api and api(link)
+    if type(stats) ~= "table" then return end
+    local parts, seen = {}, {}
+    for _, stat in ipairs(quickStats) do
+        local key, fallback = stat[1], stat[2]
+        local value = stats[key]
+        if type(value) == "number" and value ~= 0 and not seen[fallback] then
+            seen[fallback] = true
+            parts[#parts + 1] = ("%+g %s"):format(value, _G[key] or fallback)
+        end
+    end
+    local summary = table.concat(parts, " · ", 1, math.min(5, #parts))
+    statsByLink[link] = summary
+    return summary
+end
 
 local function instant(id)
     if not itemInstant then return end

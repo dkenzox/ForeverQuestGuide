@@ -13,6 +13,7 @@ local tabs = {
     { key = "fish", label = L.TAB_FISH },
 }
 local ui, launcher, zone, detail, message
+local markedHere
 local tab, index, entries, history = 1, 1, {}, {}
 local refreshPending, refreshPins, elapsed, dataPrimed
 local render, draw, openQuest
@@ -49,9 +50,40 @@ local function mark(point)
     else
         local waypoint = UiMapPoint.CreateFromCoordinates(point.mapID, point.x / 100, point.y / 100)
         local result = C_Map.SetUserWaypoint(waypoint)
+        if result ~= false then markedHere = true end
         message = result == false and L.WAYPOINT_FAILED or L.WAYPOINT_SET:format(Data.ZoneName(point.mapID))
     end
     draw()
+end
+
+local function hasWaypoint()
+    if C_Map.HasUserWaypoint then return C_Map.HasUserWaypoint() end
+    if C_Map.GetUserWaypoint then return C_Map.GetUserWaypoint() ~= nil end
+    return markedHere
+end
+
+local function clearWaypoint()
+    local status
+    if InCombatLockdown() then
+        status = L.WAYPOINT_COMBAT
+    elseif not C_Map.ClearUserWaypoint then
+        status = L.CLEAR_MARK_UNAVAILABLE
+    elseif not hasWaypoint() then
+        status = L.NO_WAYPOINT
+    else
+        C_Map.ClearUserWaypoint()
+        markedHere, status = nil, L.WAYPOINT_CLEARED
+    end
+    if ui and ui:IsShown() then
+        message = status
+        draw()
+    else
+        print(status)
+    end
+end
+
+local function pageSize()
+    return detail and View.detailPageSize or View.pageSize
 end
 
 local function queueRefresh(itemsOnly)
@@ -76,7 +108,7 @@ end
 
 draw = function()
     index = math.max(1, math.min(index, #entries))
-    View.Rows(ui, entries, index, tabs[tab].key == "gear" and not detail)
+    View.Rows(ui, entries, index, tabs[tab].key == "gear" and not detail, detail and detail.section)
     local entry = entries[index]
     local point = nearest(entry)
     ui.detailTitle:SetText(entry and entry.title or tabs[tab].label)
@@ -84,18 +116,16 @@ draw = function()
     local role = point and Pins.Label(point.stage)
     ui.coords:SetText(point and ("%s · %.1f, %.1f"):format(role or Data.ZoneName(point.mapID), point.x, point.y) or "")
     ui.waypoint:SetEnabled(point ~= nil)
+    ui.clearWaypoint:SetEnabled(not not (C_Map.ClearUserWaypoint and hasWaypoint()))
     ui.status:SetText(message or ui.contextStatus or "")
     local mapZone = entry and entry.mapZone or zone
     local quest = (detail and detail.quest) or (entry and entry.quest)
     local highlighted
     if quest then
         highlighted = Pins.Points(quest, mapZone)
-        if detail and point then
-            -- Draw the focused location first when several objectives share a map cell.
-            table.insert(highlighted, 1, point)
-        end
+        if point then table.insert(highlighted, 1, point) end
     end
-    ZoneMap.Draw(ui.map, mapZone, entries, index, tabs[tab].key, highlighted)
+    ZoneMap.Draw(ui.map, mapZone, entries, index, tabs[tab].key, highlighted, tabs[tab].key == "gear" or detail ~= nil)
 end
 
 render = function(preserve)
@@ -127,7 +157,7 @@ render = function(preserve)
     if not zone then
         ui.emptyText = L.NO_PLAYER_ZONE
     elseif detail then
-        entries = Entries.Quest(detail.quest, zone)
+        entries = Entries.Quest(detail.quest, zone, detail.section)
         ui.emptyText = L.QUEST_NO_DETAILS
     elseif category == "quests" or category == "gear" then
         if not Data.ready then
@@ -183,7 +213,24 @@ local function back()
     render()
 end
 
+local function selectSection(section)
+    if detail and detail.section ~= section then
+        detail.section, index, message = section, 1, nil
+        render()
+    end
+end
+
+local function stepSection(offset)
+    for i, section in ipairs(View.sections) do
+        if detail.section == section then
+            selectSection(View.sections[(i - 1 + offset) % #View.sections + 1])
+            return
+        end
+    end
+end
+
 local function focusPoint(point)
+    if point.stage then selectSection(point.stage) end
     for i, row in ipairs(entries) do
         for _, candidate in ipairs(row.points or {}) do
             if candidate.stage == point.stage and candidate.mapID == point.mapID
@@ -203,7 +250,9 @@ openQuest = function(quest, point)
     if not detail or detail.quest.id ~= quest.id then
         history[#history + 1] = { tab = tab, detail = detail, index = index }
         local level = Data.Difficulty(quest, Data.Player())
-        tab, detail = 1, { title = Entries.QuestTitle(quest, level), quest = quest }
+        local section = point and point.stage or (Data.OnQuest(quest.id) and "objective" or "start")
+        if not point and C_QuestLog.ReadyForTurnIn and C_QuestLog.ReadyForTurnIn(quest.id) then section = "finish" end
+        tab, detail = 1, { title = Entries.QuestTitle(quest, level), quest = quest, section = section }
         index, message = 1, nil
         render()
     end
@@ -243,13 +292,16 @@ end
 local function onPad(_, key)
     if key == "PADDUP" then moveFocus(-1)
     elseif key == "PADDDOWN" then moveFocus(1)
+    elseif key == "PADDLEFT" and detail then stepSection(-1)
+    elseif key == "PADDRIGHT" and detail then stepSection(1)
     elseif key == "PADDLEFT" or key == "PADLSHOULDER" then selectTab((tab - 2) % #tabs + 1)
     elseif key == "PADDRIGHT" or key == "PADRSHOULDER" then selectTab(tab % #tabs + 1)
-    elseif key == "PADLTRIGGER" then moveFocus(-View.pageSize)
-    elseif key == "PADRTRIGGER" then moveFocus(View.pageSize)
+    elseif key == "PADLTRIGGER" then moveFocus(-pageSize())
+    elseif key == "PADRTRIGGER" then moveFocus(pageSize())
     elseif key == "PAD1" then openDetails(entries[index])
     elseif key == "PAD2" then back()
     elseif key == "PAD3" then mark(nearest(entries[index]))
+    elseif key == "PADLSTICK" then clearWaypoint()
     elseif key == "PAD4" then toggleFilter()
     elseif key == "PADRSTICK" then toggleQuestMode()
     end
@@ -275,6 +327,7 @@ end
 local function build()
     ui = View.Create(tabs, {
         close = close, back = back, tab = selectTab, filter = toggleFilter, questMode = toggleQuestMode,
+        section = selectSection, clear = clearWaypoint,
         questLink = function(position)
             index = position
             local entry = entries[position]
@@ -288,7 +341,7 @@ local function build()
                 draw()
             end
         end,
-        page = function(offset) moveFocus(offset * View.pageSize) end,
+        page = function(offset) moveFocus(offset * pageSize()) end,
         pin = function(position, point, button)
             local entry = entries[position]
             if button == "LeftButton" and detail and point.stage then
@@ -365,7 +418,10 @@ end
 
 SLASH_FOREVERQUESTGUIDE1 = "/fqg"
 SlashCmdList.FOREVERQUESTGUIDE = function(command)
-    if (command or ""):lower():match("^%s*minimap%s*$") then
+    command = (command or ""):lower():match("^%s*(.-)%s*$")
+    if command == "clear" then
+        clearWaypoint()
+    elseif command == "minimap" then
         local settings = Guide.Character.Settings()
         settings.hideMinimap = not settings.hideMinimap
         print(settings.hideMinimap and L.MINIMAP_HIDDEN or L.MINIMAP_VISIBLE)
@@ -387,13 +443,14 @@ for _, event in ipairs({
     "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "ADDON_LOADED", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED",
     "QUEST_LOG_UPDATE", "QUEST_TURNED_IN", "QUEST_ACCEPTED", "QUEST_DATA_LOAD_RESULT", "PLAYER_LEVEL_UP",
     "SKILL_LINES_CHANGED", "SPELLS_CHANGED", "UPDATE_FACTION", "ITEM_DATA_LOAD_RESULT", "PLAYER_REGEN_DISABLED",
-    "MAP_EXPLORATION_UPDATED",
+    "MAP_EXPLORATION_UPDATED", "USER_WAYPOINT_UPDATED",
 }) do
     events:RegisterEvent(event)
 end
-events:SetScript("OnEvent", function(_, event, arg)
+events:SetScript("OnEvent", function(_, event, arg, success)
     if event == "PLAYER_LOGIN" then
         attachLauncher()
+        Guide.MinimapButton.Create(ForeverQuestGuide_Toggle)
         checkZone()
         C_Timer.After(1, prime)
     elseif event == "ADDON_LOADED" then
@@ -407,10 +464,14 @@ events:SetScript("OnEvent", function(_, event, arg)
             ui.map.zone = false
             render(true)
         end
+    elseif event == "USER_WAYPOINT_UPDATED" then
+        if ui and ui:IsShown() then draw() end
     elseif event == "ITEM_DATA_LOAD_RESULT" then
         Guide.Gear.Loaded(arg)
     elseif event == "QUEST_DATA_LOAD_RESULT" then
-        if Data.IsNative() and Native.DataLoaded(arg) then queueRefresh() end
+        local updated = Guide.Rewards.Loaded(arg, success)
+        if Data.IsNative() and Native.DataLoaded(arg) then queueRefresh()
+        elseif updated then queueRefresh(true) end
     else
         Native.Invalidate()
         queueRefresh()

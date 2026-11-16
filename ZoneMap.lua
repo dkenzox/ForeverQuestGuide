@@ -158,37 +158,54 @@ function ZoneMap.UpdatePlayer(map, zone)
     if map.player:IsShown() then place(map.player, map.canvas, x, y) end
 end
 
-function ZoneMap.Draw(map, zone, entries, focused, tab, highlighted)
+function ZoneMap.Draw(map, zone, entries, focused, tab, highlighted, onlySelected)
     if map.zone ~= zone then loadArt(map, zone) end
     local count, cells = 0, {}
     local color = colors[tab]
     map.legend:SetShown(tab == "quests" or tab == "gear")
     map.caption:SetText(zone and Guide.Data.ZoneName(zone) or "")
+    local width, height = map.canvas:GetWidth(), map.canvas:GetHeight()
+    local function fits(px, py, spacing)
+        if px < 0 or px > width or py < 0 or py > height then return false end
+        local cx, cy = math.floor(px / 16), math.floor(py / 16)
+        for ix = cx - 1, cx + 1 do
+            for iy = cy - 1, cy + 1 do
+                for _, prior in ipairs(cells[ix .. ":" .. iy] or {}) do
+                    if (px - prior.x)^2 + (py - prior.y)^2 < spacing^2 then return false, prior end
+                end
+            end
+        end
+        return true
+    end
     local function add(entry, index, selected, points)
         for _, point in ipairs(points or entry.points or {}) do
+            if count >= 68 then return end
             local x, y = ZoneMap.Translate(point, zone)
             if x and y and x >= 0 and x <= 1 and y >= 0 and y <= 1 then
-                -- Keep the selected entry in front of adjacent markers.
-                local key = ("%d:%d"):format(math.floor(x * 38), math.floor(y * 22))
-                local cell = cells[key]
-                if not cell then cell = {}; cells[key] = cell end
-                local role = selected and point.stage or "background"
-                if not cell[role] and (selected or not next(cell)) and count < 205 then
-                    cell[role] = true
+                local px, py = x * width, y * height
+                local size, spacing = selected and 13 or 9, selected and 15 or 14
+                local free, prior = fits(px, py, spacing)
+                if not free and selected and prior and prior.selected and point.stage and point.stage ~= prior.stage then
+                    -- Separate collocated stages visually and keep the actual waypoint coordinates.
+                    for step = 0, 3 do
+                        local angle = (step + (point.stage == "objective" and 1 or 2)) * math.pi / 2
+                        local nx, ny = x * width + math.cos(angle) * spacing, y * height + math.sin(angle) * spacing
+                        if fits(nx, ny, spacing) then px, py, free = nx, ny, true; break end
+                    end
+                end
+                if free then
+                    local key = math.floor(px / 16) .. ":" .. math.floor(py / 16)
+                    cells[key] = cells[key] or {}
+                    cells[key][#cells[key] + 1] = { x = px, y = py, stage = point.stage, selected = selected }
                     count = count + 1
                     local pin = pinFor(map, count)
-                    local size = selected and 17 or (point.stage and 13 or 10)
                     pin:SetSize(size, size)
-                    local priority = point.stage == "start" and 3 or (point.stage == "finish" and 2 or 1)
-                    pin:SetFrameLevel(map.canvas:GetFrameLevel() + (selected and 5 or 1) + priority)
-                    Pins.Style(pin, point.stage, color, selected)
+                    pin:SetFrameLevel(map.canvas:GetFrameLevel() + (selected and 5 or 2))
+                    local icon = not point.stage and entry.icon or nil
+                    Pins.Style(pin, point.stage, color, selected, icon)
+                    pin:SetAlpha(selected and 1 or .78)
                     pin.entry, pin.index, pin.point = entry, index, point
-                    if selected and point.stage == "objective" and cell.start then x = math.min(.985, x + .032) end
-                    if selected and point.stage == "finish" then
-                        if cell.start then x = math.max(.015, x - .032) end
-                        if cell.objective and not cell.start then x = math.max(.015, x - .032) end
-                    end
-                    place(pin, map.canvas, x, y)
+                    place(pin, map.canvas, px / width, py / height)
                     pin:Show()
                 end
             end
@@ -196,9 +213,11 @@ function ZoneMap.Draw(map, zone, entries, focused, tab, highlighted)
     end
     if zone then
         if entries[focused] then add(entries[focused], focused, true, highlighted) end
-        for i, entry in ipairs(entries) do
-            if i ~= focused then add(entry, i, false) end
-            if count >= 205 then break end
+        if not onlySelected then
+            for i, entry in ipairs(entries) do
+                if i ~= focused then add(entry, i, false) end
+                if count >= 68 then break end
+            end
         end
     end
     for i = count + 1, #map.pins do

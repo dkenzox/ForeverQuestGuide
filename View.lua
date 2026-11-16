@@ -1,6 +1,6 @@
 local _, Guide = ...
 local L, ZoneMap = Guide.Locale, Guide.ZoneMap
-local View = { pageSize = 8 }
+local View = { pageSize = 8, detailPageSize = 7 }
 Guide.View = View
 
 local icons = {
@@ -11,6 +11,7 @@ local icons = {
     fish = "Interface\\Icons\\Trade_Fishing",
 }
 View.icons = icons
+View.sections = { "start", "objective", "finish", "rewards" }
 
 local function font(parent, template, anchor, x, y, width)
     local label = parent:CreateFontString(nil, "OVERLAY", template)
@@ -112,9 +113,11 @@ local function rowButton(parent, index, selectRow, openQuest)
     row.title = font(row, "GameFontHighlight", "TOPLEFT", 48, -6, 321)
     row.subtitle = font(row, "GameFontDisableSmall", "BOTTOMLEFT", 48, 6, 321)
     row.subtitle:SetTextColor(.76, .72, .64)
+    row.summary = font(row, "GameFontHighlightSmall", "BOTTOMLEFT", 48, 3, 321)
+    row.summary:SetTextColor(.86, .83, .68)
     row.questLink = CreateFrame("Button", nil, row)
-    row.questLink:SetSize(321, 18)
-    row.questLink:SetPoint("BOTTOMLEFT", 48, 2)
+    row.questLink:SetSize(321, 14)
+    row.questLink:SetPoint("BOTTOMLEFT", 48, 0)
     row.questLink.label = font(row.questLink, "GameFontHighlightSmall", "LEFT", 0, 0, 321)
     row.questLink.label:SetTextColor(.98, .79, .36)
     row.questLink:SetHighlightTexture("Interface\\Buttons\\UI-Listbox-Highlight2", "ADD")
@@ -171,6 +174,12 @@ function View.Create(tabs, actions)
     local list = frame(ui, 392, 422, "TOPLEFT", 16, -124)
     ui.listTitle = font(list, "GameFontNormal", "TOPLEFT", 14, -10, 318)
     ui.count = font(list, "GameFontHighlightSmall", "TOPRIGHT", -14, -11)
+    ui.sections = {}
+    local labels = { L.SECTION_START, L.SECTION_GOALS, L.SECTION_FINISH, L.QUEST_REWARDS }
+    for i, key in ipairs(View.sections) do
+        ui.sections[key] = View.Button(list, labels[i], 90, 22, "TOPLEFT", 10 + 94 * (i - 1), -28,
+            function() actions.section(key) end)
+    end
     ui.rows = {}
     for i = 1, View.pageSize do ui.rows[i] = rowButton(list, i, actions.row, actions.questLink) end
     ui.prev = View.Button(list, "<", 27, 21, "BOTTOM", -57, 10, function() actions.page(-1) end)
@@ -192,30 +201,38 @@ function View.Create(tabs, actions)
     ui.detail = font(detail, "GameFontHighlight", "TOPLEFT", 13, -46, 370)
     ui.detail:SetWordWrap(true)
     ui.detail:SetMaxLines(4)
-    ui.coords = font(detail, "GameFontHighlightSmall", "BOTTOMLEFT", 13, 15, 233)
+    ui.coords = font(detail, "GameFontHighlightSmall", "BOTTOMLEFT", 13, 15, 170)
     ui.coords:SetTextColor(.94, .82, .57)
-    ui.waypoint = View.Button(detail, L.MARK, 110, 24, "BOTTOMRIGHT", -11, 9, actions.mark)
+    ui.waypoint = View.Button(detail, L.MARK, 105, 24, "BOTTOMRIGHT", -11, 9, actions.mark)
+    ui.clearWaypoint = View.Button(detail, L.CLEAR_MARK, 93, 24, "BOTTOMRIGHT", -120, 9, actions.clear)
 
     ui.filter = View.Button(ui, "", 174, 24, "BOTTOMRIGHT", -16, 31, actions.filter)
     ui.questMode = View.Button(ui, "", 130, 24, "BOTTOMRIGHT", -196, 31, actions.questMode)
     ui.status = font(ui, "GameFontHighlightSmall", "BOTTOMLEFT", 17, 37, 470)
     ui.status:SetTextColor(.81, .76, .65)
     rule(ui, "BOTTOMLEFT", 17, 27, 785)
-    local hint = font(ui, "GameFontHighlightSmall", "BOTTOMLEFT", 17, 8, 786)
-    hint:SetText(L.PAD_GUIDE_V2)
-    hint:SetJustifyH("CENTER")
+    ui.hint = font(ui, "GameFontHighlightSmall", "BOTTOMLEFT", 17, 8, 786)
+    ui.hint:SetText(L.PAD_GUIDE_V3)
+    ui.hint:SetJustifyH("CENTER")
     return ui
 end
 
-function View.Rows(ui, entries, index, showQuestLinks)
-    local size, total = View.pageSize, #entries
+function View.Rows(ui, entries, index, showQuestLinks, section)
+    local size, total = section and View.detailPageSize or View.pageSize, #entries
+    for key, button in pairs(ui.sections) do
+        button:SetShown(section ~= nil)
+        button:SetEnabled(key ~= section)
+    end
+    ui.hint:SetText(section and L.PAD_DETAIL or L.PAD_GUIDE_V3)
     local page, pages = math.floor((index - 1) / size) + 1, math.max(1, math.ceil(total / size))
     local first = (page - 1) * size + 1
     for i, row in ipairs(ui.rows) do
         local position = first + i - 1
-        local entry = entries[position]
+        local entry = i <= size and entries[position]
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 7, (section and -55 or -30) - (i - 1) * 44)
         row.index = position
-        row:SetShown(entry ~= nil)
+        row:SetShown(not not entry)
         if entry then
             local focused = position == index
             row.title:SetText(entry.title)
@@ -224,6 +241,11 @@ function View.Rows(ui, entries, index, showQuestLinks)
             local questLink = showQuestLinks and entry.quest
             row.subtitle:SetShown(not questLink)
             row.subtitle:SetText(entry.subtitle or "")
+            row.subtitle:ClearAllPoints()
+            row.subtitle:SetPoint(entry.summary and "TOPLEFT" or "BOTTOMLEFT", 48, entry.summary and -18 or 6)
+            row.summary:ClearAllPoints()
+            row.summary:SetPoint(questLink and "TOPLEFT" or "BOTTOMLEFT", 48, questLink and -18 or 3)
+            row.summary:SetText(entry.summary or "")
             row.questLink:SetShown(not not questLink)
             if questLink then row.questLink.label:SetText(entry.subtitle) end
             row.icon:SetTexture(entry.icon)

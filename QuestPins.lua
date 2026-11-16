@@ -45,24 +45,37 @@ function QuestPins.Points(quest, zone, only)
     return result
 end
 
-function QuestPins.Decorate(pin)
-    pin.border = pin:CreateTexture(nil, "BACKGROUND")
-    pin.border:SetAllPoints()
-    pin.fill = pin:CreateTexture(nil, "BORDER")
-    pin.fill:SetPoint("TOPLEFT", 1, -1)
-    pin.fill:SetPoint("BOTTOMRIGHT", -1, 1)
-    pin.fill:SetColorTexture(.06, .045, .027, .96)
-    pin.caption = pin:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    pin.caption:SetPoint("CENTER", 0, 1)
+local function roundTexture(pin, layer, inset)
+    local texture = pin:CreateTexture(nil, layer)
+    texture:SetPoint("TOPLEFT", inset, -inset)
+    texture:SetPoint("BOTTOMRIGHT", -inset, inset)
+    local mask = pin:CreateMaskTexture()
+    mask:SetAllPoints(texture)
+    mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    texture:AddMaskTexture(mask)
+    return texture
 end
 
-function QuestPins.Style(pin, stage, color, selected)
+function QuestPins.Decorate(pin)
+    pin.border = roundTexture(pin, "BACKGROUND", 0)
+    pin.fill = roundTexture(pin, "BORDER", 1)
+    pin.fill:SetColorTexture(.075, .057, .033, .96)
+    pin.picture = roundTexture(pin, "ARTWORK", 1)
+    pin.caption = pin:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    pin.caption:SetPoint("CENTER", 0, .5)
+    pin.caption:SetScale(.82)
+end
+
+function QuestPins.Style(pin, stage, color, selected, icon)
     local style = stageByKey[stage]
     local r, g, b
     if style then r, g, b = style.r, style.g, style.b else r, g, b = unpack(color) end
     pin.border:SetColorTexture(r, g, b, selected and 1 or .8)
     pin.caption:SetTextColor(r, g, b)
     pin.caption:SetText(style and style.glyph or "•")
+    pin.caption:SetShown(not icon)
+    pin.picture:SetTexture(icon)
+    pin.picture:SetShown(icon ~= nil)
 end
 
 local frames, library = {}, nil
@@ -88,14 +101,14 @@ function QuestPins.RefreshMinimap(zone, quests, onClick)
         local ready = active and C_QuestLog.ReadyForTurnIn and C_QuestLog.ReadyForTurnIn(quest.id)
         for _, point in ipairs(QuestPins.Points(quest, zone, ready and "finish" or (not active and "start" or nil))) do
             if not (active and point.stage == "start") then
-                local cell = ("%s:%d:%.0f:%.0f"):format(point.stage, point.mapID, point.x * 2, point.y * 2)
+                local cell = ("%s:%d:%.0f:%.0f"):format(point.stage, point.mapID, point.x, point.y)
                 if not cells[cell] and used < 400 then
                     cells[cell] = true
                     used = used + 1
                     local pin = frames[used]
                     if not pin then
                         pin = CreateFrame("Button", nil, Minimap)
-                        pin:SetSize(14, 14)
+                        pin:SetSize(11, 11)
                         QuestPins.Decorate(pin)
                         pin:SetScript("OnEnter", function(self)
                             GameTooltip:SetOwner(self, "ANCHOR_LEFT")
