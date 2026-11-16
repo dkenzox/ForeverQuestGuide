@@ -228,17 +228,17 @@ function ZoneMap.Draw(map, zone, entries, focused, tab, highlighted, onlySelecte
     ZoneMap.UpdatePlayer(map, zone)
 end
 
-function ZoneMap.Create(parent, onPin)
+function ZoneMap.Create(parent, onPin, width, height)
     local map = CreateFrame("Frame", nil, parent)
-    map:SetSize(388, 258)
+    map:SetSize(width, height)
     map:SetPoint("TOPLEFT", 5, -5)
     local canvas = CreateFrame("Frame", nil, map)
     canvas:SetPoint("CENTER")
-    canvas:SetSize(388, 258)
+    canvas:SetSize(width, height)
     map.canvas, map.onPin = canvas, onPin
     map.tiles, map.overlays, map.pins, map.zone = {}, {}, {}, false
     local legend = CreateFrame("Frame", nil, map)
-    legend:SetSize(360, 19)
+    legend:SetSize(math.min(width - 18, 360), 19)
     legend:SetPoint("BOTTOM", 0, 4)
     legend:SetFrameLevel(canvas:GetFrameLevel() + 12)
     local background = legend:CreateTexture(nil, "BACKGROUND")
@@ -249,7 +249,7 @@ function ZoneMap.Create(parent, onPin)
     legendText:SetText(L.MAP_LEGEND)
     map.legend = legend
     local caption = CreateFrame("Frame", nil, map)
-    caption:SetSize(372, 19)
+    caption:SetSize(width - 20, 19)
     caption:SetPoint("TOP", 0, -4)
     caption:SetFrameLevel(canvas:GetFrameLevel() + 12)
     map.caption = caption:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")

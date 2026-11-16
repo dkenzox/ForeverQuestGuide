@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Zone Atlas como interfaz del addon. La lista permanece visible junto al mapa ampliado.
+- La zona inferior muestra inicio, objetivos, entrega y recompensas de la misión enfocada.
+- Navegación con mando entre lista y etapas, con regreso al objeto de Equipo al abrir su misión.
+
 ## 0.2.5
 
 - La ficha de recompensas usa los marcos y los colores de misión de WoW, incluido el tinte rojo cuando el cliente marca un objeto como inutilizable.

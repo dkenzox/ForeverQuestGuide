@@ -4,7 +4,7 @@ local RewardView = {}
 Guide.RewardView = RewardView
 
 local tileWidth, tileHeight, rowStep = 174, 43, 47
-local firstRow, bottom = 32, 268
+local firstRow = 31
 local parchmentFont = QuestFont and "QuestFont" or "GameFontHighlight"
 local nameplateArt = "Interface\\QuestFrame\\UI-QuestItemNameFrame"
 local unknownIcon = "Interface\\Icons\\INV_Misc_QuestionMark"
@@ -96,10 +96,11 @@ function RewardView.Tooltip(tile)
     GameTooltip:Show()
 end
 
-function RewardView.Create(parent, onSelect)
+function RewardView.Create(parent, onSelect, x, y, height)
     local sheet = CreateFrame("Frame", nil, parent)
-    sheet:SetPoint("TOPLEFT", 9, -54)
-    sheet:SetSize(374, 333)
+    sheet:SetPoint("TOPLEFT", x, y)
+    sheet:SetSize(374, height)
+    sheet.bodyBottom = height - 51
     sheet.onSelect, sheet.tiles, sheet.headings = onSelect, {}, {}
     background(sheet, "BACKGROUND", 222 / 255, 176 / 255, 107 / 255)
     local paper = sheet:CreateTexture(nil, "BACKGROUND", nil, 1)
@@ -115,20 +116,20 @@ function RewardView.Create(parent, onSelect)
     ink(sheet.empty)
 
     local line = sheet:CreateTexture(nil, "ARTWORK")
-    line:SetPoint("BOTTOMLEFT", 12, 53)
-    line:SetPoint("BOTTOMRIGHT", -12, 53)
+    line:SetPoint("BOTTOMLEFT", 12, 45)
+    line:SetPoint("BOTTOMRIGHT", -12, 45)
     line:SetHeight(1)
     line:SetColorTexture(.45, .30, .16)
-    local totalsTitle = text(sheet, parchmentFont, "BOTTOMLEFT", 12, 34)
+    local totalsTitle = text(sheet, parchmentFont, "BOTTOMLEFT", 12, 29)
     totalsTitle:SetText(L.REWARD_MONEY_XP)
     ink(totalsTitle)
-    sheet.totals = text(sheet, "GameFontHighlightLarge", "BOTTOMLEFT", 12, 11)
+    sheet.totals = text(sheet, "GameFontHighlightLarge", "BOTTOMLEFT", 12, 8)
     sheet:Hide()
     return sheet
 end
 
 -- Pack two items per row, carrying the section heading over to the next page.
-local function layout(entries)
+local function layout(entries, bottom)
     local pages, page, y, column, kind = {}, nil, nil, nil, nil
     for i, entry in ipairs(entries) do
         local heading = entry.subtitle ~= kind
@@ -150,7 +151,7 @@ local function layout(entries)
 end
 
 function RewardView.Draw(sheet, entries, index)
-    local pages = layout(entries)
+    local pages = layout(entries, sheet.bodyBottom)
     local pageIndex = #pages
     while pageIndex > 1 and pages[pageIndex].first > index do pageIndex = pageIndex - 1 end
     local page = pages[pageIndex]

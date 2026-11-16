@@ -2,6 +2,8 @@
 
 Atlas de la zona actual para **World of Warcraft: Forever** (interfaz 16001). Abrí o cerrá la guía con el botón de mapa del minimapa, **/fqg**, el botón **Guía** del mapa mundial o la asignación **Abrir o cerrar la guía del mapa**. Si cruzás a otra zona con la ventana abierta, el atlas se actualiza automáticamente.
 
+La lista de la zona queda a la izquierda. El mapa, las etapas y las recompensas de la misión seleccionada aparecen a la derecha. Podés recorrer la lista y comparar misiones sin abrir otra pantalla.
+
 ## Instalación
 
 1. Colocá los archivos en una carpeta llamada **ForeverQuestGuide** que contenga **ForeverQuestGuide.toc** directamente.
@@ -29,14 +31,14 @@ El mapa usa las texturas de las zonas exploradas que provee el cliente. Si el ma
 | Cruceta izquierda o derecha | Cambiar de pestaña o de sección dentro de una ficha |
 | LB y RB | Cambiar pestaña principal |
 | LT y RT | Avanzar por páginas |
-| A / ✕ | Abrir ficha o marcar un recurso |
-| B / ○ | Volver o cerrar |
+| A / ✕ | Pasar de la lista a la ficha, ver un objeto o marcar un recurso |
+| B / ○ | Devolver el foco a la lista, volver a Equipo o cerrar |
 | X / □ | Marcar la ubicación más cercana de la selección |
 | L3 | Borrar el waypoint activo |
 | Y / △ | Mostrar u ocultar misiones grises |
 | R3 | Alternar entre misiones disponibles y en curso |
 
-Podés asignar un botón o combinación libre para abrir la guía desde las asignaciones del juego. Con el ratón, un clic enfoca una fila y el siguiente abre su ficha. Un clic en un pin de misión abre la ficha y selecciona la ubicación. El clic derecho marca ese punto. En mapas que admiten marcadores personales, **Marcar punto** coloca el marcador del cliente. Para quitarlo, usá **Borrar punto**, **L3** o **/fqg clear**. La guía se cierra al entrar en combate.
+Podés asignar un botón o combinación libre para abrir la guía desde las asignaciones del juego. Con el ratón, un clic en una misión actualiza el mapa y la ficha. Hacé clic en una etapa para navegar sus ubicaciones. Un clic en un pin de misión abre la ficha y selecciona la ubicación. El clic derecho marca ese punto. En mapas que admiten marcadores personales, **Marcar punto** coloca el marcador del cliente. Para quitarlo, usá **Borrar punto**, **L3** o **/fqg clear**. La guía se cierra al entrar en combate.
 
 ## Estructura
 
