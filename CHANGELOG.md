@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- La ficha de recompensas usa un fondo oscuro continuo con fichas independientes para EXP, monedas y objetos.
+- La ficha se ajusta al contenido y omite EXP o monedas con valor cero.
+
 ## 0.3.0
 
 - Zone Atlas como interfaz del addon. La lista permanece visible junto al mapa ampliado.

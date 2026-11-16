@@ -49,7 +49,7 @@ local function estimate(quest)
 end
 
 local function moneyText(copper)
-    if not copper then return L.UNKNOWN_MONEY end
+    if not copper or copper <= 0 then return end
     local gold = math.floor(copper / 10000)
     local silver = math.floor(copper / 100) % 100
     local remainder = copper % 100
@@ -59,7 +59,7 @@ local function moneyText(copper)
     end
     if gold > 0 then coin(gold, "Gold") end
     if silver > 0 then coin(silver, "Silver") end
-    if remainder > 0 or #parts == 0 then coin(remainder, "Copper") end
+    if remainder > 0 then coin(remainder, "Copper") end
     return table.concat(parts, " ")
 end
 
@@ -78,9 +78,9 @@ function Rewards.Summary(quest)
     local xpMax = UnitXPMax and UnitXPMax("player")
     local maxLevel = GetMaxPlayerLevel and GetMaxPlayerLevel()
     if maxLevel and UnitLevel("player") >= maxLevel then xp, approximate = 0, false end
-    local xpText = L.UNKNOWN_XP
-    if xp ~= nil then
-        local value = (approximate and "~" or "") .. xp
+    local xpText
+    if xp and xp > 0 then
+        local value = (approximate and "~" or "") .. (BreakUpLargeNumbers and BreakUpLargeNumbers(xp) or xp)
         xpText = xpMax and xpMax > 0 and L.XP_PERCENT:format(value, 100 * xp / xpMax) or L.XP_AMOUNT:format(value)
     end
     local moneyDisplay = moneyText(money)
@@ -92,7 +92,9 @@ function Rewards.Summary(quest)
         itemText[#itemText + 1] = icon and ("|T%s:11:11|t"):format(icon) or item.name
     end
     if #items > 3 then itemText[#itemText + 1] = "+" .. (#items - 3) end
-    local summary = xpText .. "  ·  " .. moneyDisplay
-    if #itemText > 0 then summary = summary .. "  ·  " .. table.concat(itemText, " ") end
-    return summary, xpText, moneyDisplay, items
+    local parts = {}
+    if xpText then parts[#parts + 1] = xpText end
+    if moneyDisplay then parts[#parts + 1] = moneyDisplay end
+    if #itemText > 0 then parts[#parts + 1] = table.concat(itemText, " ") end
+    return table.concat(parts, "  ·  "), xpText, moneyDisplay, items
 end

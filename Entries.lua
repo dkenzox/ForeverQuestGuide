@@ -87,7 +87,8 @@ function Entries.Quest(quest, zone, section)
         addLocations(entries, quest.finishers, section, zone)
     else
         local _, xp, money, items = Rewards.Summary(quest)
-        entries.totals = money .. "  ·  " .. xp
+        entries.xp, entries.money = xp, money
+        entries.totals = xp and money and (money .. "  ·  " .. xp) or (money or xp)
         local groups = {
             { L.REWARD_CHOICE, L.REWARD_CHOOSE_ONE },
             { L.REWARD_GUARANTEED, L.REWARD_ALSO_RECEIVE },
