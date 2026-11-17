@@ -66,7 +66,7 @@ local function bestCluster(points, mapID, origin)
             end
         end
         if size >= bestSize then
-            local travel = distance(origin, worldPoint(mapID, anchor.x, anchor.y))
+            local travel = origin and distance(origin, worldPoint(mapID, anchor.x, anchor.y))
             if size > bestSize or (travel and (not bestDistance or travel < bestDistance)) then
                 bestSize, bestDistance = size, travel
             end
@@ -92,9 +92,22 @@ local function zoneSummary(mapID, player, hideDungeons, origin)
     return starts, active, cluster, travel
 end
 
-function NextZone.Recommend(currentZone, zones, player, hideDungeons)
+local function continent(mapID)
+    local continentType = Enum and Enum.UIMapType and Enum.UIMapType.Continent or 2
+    local seen = {}
+    while mapID and mapID > 0 and not seen[mapID] do
+        seen[mapID] = true
+        local info = Data.MapInfo(mapID)
+        if not info then return end
+        if info.mapType == continentType then return mapID end
+        mapID = info.parentMapID
+    end
+end
+
+function NextZone.Recommend(currentZone, zones, player, hideDungeons, otherContinents)
     if not currentZone or not Data.ready then return {} end
     local here = Data.MapInfo(currentZone)
+    local hereContinent = continent(currentZone)
     local x, y = playerPosition(currentZone)
     local origin = worldPoint(currentZone, x or .5, y or .5)
     local result = {}
@@ -103,14 +116,25 @@ function NextZone.Recommend(currentZone, zones, player, hideDungeons)
         local current = mapID == currentZone
         local info = Data.MapInfo(mapID)
         local center = worldPoint(mapID, .5, .5)
+        local zoneContinent = continent(mapID)
+        local overseas
+        if hereContinent and zoneContinent then
+            overseas = hereContinent ~= zoneContinent
+        else
+            overseas = origin and center and origin.instance ~= center.instance
+        end
         local travel = distance(origin, center)
         local sameRegion = here and info and here.parentMapID == info.parentMapID
-        if current or (travel and travel <= 13000) or ((not origin or not center) and sameRegion) then
-            local starts, active, cluster, hubTravel = zoneSummary(mapID, player, hideDungeons, origin)
+        local nearby = current or (not overseas and ((travel and travel <= 13000)
+            or ((not origin or not center) and sameRegion)))
+        if (otherContinents and overseas) or (not otherContinents and nearby) then
+            local hubOrigin = not otherContinents and origin or nil
+            local starts, active, cluster, hubTravel = zoneSummary(mapID, player, hideDungeons, hubOrigin)
             if current or starts + active > 0 then
-                local proximity = hubTravel or travel or (current and 0 or 5000)
+                local proximity = otherContinents and 0 or (hubTravel or travel or (current and 0 or 5000))
                 result[#result + 1] = {
-                    mapID = mapID, name = zone.name, region = zone.region, current = current,
+                    mapID = mapID, name = zone.name, region = (zoneContinent and Data.ZoneName(zoneContinent)) or zone.region,
+                    current = current,
                     starts = starts, active = active, cluster = cluster, hubTravel = hubTravel,
                     score = starts + active * 2 + cluster - proximity / 2000,
                 }
@@ -122,6 +146,7 @@ function NextZone.Recommend(currentZone, zones, player, hideDungeons)
         if a.current ~= b.current then return a.current end
         return a.mapID < b.mapID
     end)
+    if otherContinents then return result end
     local shortlist, away = {}, 0
     for _, entry in ipairs(result) do
         if entry.current or away < 3 then
