@@ -1,5 +1,5 @@
 local _, Guide = ...
-local L, View = Guide.Locale, Guide.View
+local L, View, Data = Guide.Locale, Guide.View, Guide.Data
 local Picker = {}
 Guide.ZonePicker = Picker
 
@@ -27,6 +27,10 @@ local function draw(picker)
         row:SetShown(entry ~= nil)
         if entry then
             row.title:SetText(entry.name)
+            local minLevel, maxLevel, estimated = Data.ZoneLevels(entry.mapID or picker.currentZone)
+            local range = minLevel and (minLevel == maxLevel and tostring(minLevel)
+                or ("%d–%d"):format(minLevel, maxLevel))
+            row.level:SetText(range and L.ZONE_LEVEL:format(estimated and ("~" .. range) or range) or "")
             row.region:SetText(entry.region or "")
             row.highlight:SetShown(index == picker.index)
         end
@@ -60,7 +64,7 @@ function Picker.Create(parent, onPick)
     shade:SetColorTexture(0, 0, 0, .57)
 
     local panel = CreateFrame("Frame", nil, picker, "BackdropTemplate")
-    panel:SetSize(420, 411)
+    panel:SetSize(470, 411)
     panel:SetPoint("CENTER")
     panel:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -74,7 +78,7 @@ function Picker.Create(parent, onPick)
     local title = label(panel, "GameFontNormalLarge", "TOPLEFT", 16, -14, 345)
     title:SetText(L.ZONE_PICKER)
     View.Button(panel, "×", 25, 20, "TOPRIGHT", -10, -10, function() picker:Hide() end)
-    local hint = label(panel, "GameFontHighlightSmall", "BOTTOMLEFT", 12, 8, 396)
+    local hint = label(panel, "GameFontHighlightSmall", "BOTTOMLEFT", 12, 8, 446)
     hint:SetJustifyH("CENTER")
     hint:SetText(L.ZONE_PICKER_PAD)
     picker.page = label(panel, "GameFontHighlightSmall", "BOTTOM", 0, 35, 90)
@@ -85,14 +89,16 @@ function Picker.Create(parent, onPick)
     picker.rows, picker.onPick = {}, onPick
     for i = 1, pageSize do
         local row = CreateFrame("Button", nil, panel)
-        row:SetSize(392, 29)
+        row:SetSize(442, 29)
         row:SetPoint("TOPLEFT", 14, -40 - (i - 1) * 31)
         row.highlight = row:CreateTexture(nil, "BACKGROUND")
         row.highlight:SetAllPoints()
         row.highlight:SetColorTexture(.43, .29, .125, .95)
         row:SetHighlightTexture("Interface\\Buttons\\UI-Listbox-Highlight2", "ADD")
-        row.title = label(row, "GameFontHighlight", "LEFT", 9, 0, 222)
-        row.region = label(row, "GameFontHighlightSmall", "RIGHT", -9, 0, 148)
+        row.title = label(row, "GameFontHighlight", "LEFT", 9, 0, 191)
+        row.level = label(row, "GameFontNormal", "LEFT", 205, 0, 74)
+        row.level:SetJustifyH("CENTER")
+        row.region = label(row, "GameFontHighlightSmall", "RIGHT", -9, 0, 154)
         row.region:SetJustifyH("RIGHT")
         row.region:SetTextColor(.83, .75, .60)
         row:SetScript("OnClick", function(self) picker.index = self.index; selectZone(picker) end)
@@ -103,9 +109,10 @@ function Picker.Create(parent, onPick)
 end
 
 function Picker.Open(picker, currentZone, pinnedZone)
-    picker.options = { { name = L.CURRENT_ZONE, region = currentZone and Guide.Data.ZoneName(currentZone) } }
+    picker.currentZone = currentZone
+    picker.options = { { name = L.CURRENT_ZONE, region = currentZone and Data.ZoneName(currentZone) } }
     picker.index = 1
-    for _, entry in ipairs(Guide.Data.KnownZones(currentZone)) do
+    for _, entry in ipairs(Data.KnownZones(currentZone)) do
         picker.options[#picker.options + 1] = entry
         if entry.mapID == pinnedZone then picker.index = #picker.options end
     end

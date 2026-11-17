@@ -25,6 +25,7 @@ local refreshPending, refreshPins, elapsed, dataPrimed
 local render, draw, openQuest
 local activeOnly = false
 local collapsedByZone, questCount = {}, nil
+local searchText, searchGroups = "", {}
 
 local function playerZone()
     return Data.ZoneForMap(C_Map.GetBestMapForUnit("player"))
@@ -223,6 +224,7 @@ draw = function()
 end
 
 local function collapsedGroups()
+    if searchText ~= "" then return searchGroups end
     if not collapsedByZone[zone] then collapsedByZone[zone] = {} end
     return collapsedByZone[zone]
 end
@@ -241,6 +243,9 @@ render = function(preserve)
     ui.source:SetText((category == "quests" or category == "gear") and (Data.source or "") or "GatherLite")
     local browsingQuests = category == "quests"
     ui.listTitle:SetText(browsingQuests and (activeOnly and L.ACTIVE_QUESTS or L.AVAILABLE_QUESTS) or tabs[tab].label)
+    ui.listTitle:SetWidth(browsingQuests and 91 or 225)
+    ui.search:SetShown(browsingQuests)
+    ui.clearSearch:SetShown(browsingQuests and (ui.search:GetText() or "") ~= "")
     ui.questMode:SetShown(browsingQuests)
     ui.questMode:SetText(activeOnly and L.AVAILABLE_QUESTS or L.ACTIVE_QUESTS)
     local filterable = browsingQuests or category == "gear"
@@ -263,13 +268,15 @@ render = function(preserve)
             local grouped = browsingQuests and not activeOnly
             local quests = Data.ZoneQuests(zone, player, not settings.showTrivial, mode, settings.hideDungeonQuests, grouped)
             if browsingQuests then
+                local searching = searchText ~= ""
+                if searching then quests = Entries.SearchQuests(quests, searchText) end
                 if grouped then
-                    entries = Entries.AvailableQuests(quests, zone, collapsedGroups())
-                    questCount = #quests
+                    entries = Entries.AvailableQuests(quests, zone, collapsedGroups(), searching)
                 else
                     entries = Entries.Quests(quests, zone)
                 end
-                ui.emptyText = activeOnly and L.EMPTY_ACTIVE or L.EMPTY_AVAILABLE
+                if grouped or searching then questCount = #quests end
+                ui.emptyText = searching and L.NO_QUEST_MATCHES or (activeOnly and L.EMPTY_ACTIVE or L.EMPTY_AVAILABLE)
                 ui.contextStatus = Data.IsNative() and L.STATUS_NATIVE_SOURCE or (activeOnly and L.ACTIVE_QUESTS or L.QUEST_ORDER)
             else
                 local waiting
@@ -302,7 +309,17 @@ render = function(preserve)
     draw()
 end
 
+local function updateSearch(text)
+    local lower = strlower or string.lower
+    local query = lower((text or ""):match("^%s*(.-)%s*$"))
+    if query == searchText then return end
+    searchText, searchGroups = query, {}
+    index, detail, returnTo, message = 1, nil, nil, nil
+    render()
+end
+
 local function selectTab(destination)
+    ui.search:ClearFocus()
     tab, index, detail, returnTo, message = destination, 1, nil, nil, nil
     render()
 end
@@ -503,17 +520,24 @@ end
 
 local function chooseZone(mapID)
     pinnedZone, zone = mapID, mapID or currentZone
+    searchGroups = {}
     index, detail, returnTo, message = 1, nil, nil, nil
     render()
 end
 
 local function showZonePicker()
+    ui.search:ClearFocus()
     Picker.Open(ui.zonePicker, currentZone, pinnedZone)
 end
 
 local function onPad(_, key)
     if ui.zonePicker:IsShown() then Picker.OnPad(ui.zonePicker, key); return end
+    if ui.search:HasFocus() then
+        if key == "PAD1" or key == "PAD2" or key == "PADDDOWN" then ui.search:ClearFocus() end
+        return
+    end
     if key == "PADFORWARD" then showZonePicker()
+    elseif key == "PADDUP" and not detail and index == 1 and ui.search:IsShown() then ui.search:SetFocus()
     elseif key == "PADDUP" then moveFocus(-1)
     elseif key == "PADDDOWN" then moveFocus(1)
     elseif key == "PADDLEFT" and detail then stepSection(-1)
@@ -541,6 +565,7 @@ local function checkZone()
         currentZone = detected
         Native.Invalidate()
         if not pinnedZone then
+            searchGroups = {}
             zone, index, detail, returnTo, message = detected, 1, nil, nil, nil
         end
         queueRefresh()
@@ -566,6 +591,7 @@ local function build()
     ui = View.Create(tabs, {
         close = close, back = back, tab = selectTab, filter = toggleFilter, questMode = toggleQuestMode, dungeons = toggleDungeons,
         section = chooseSection, clear = clearWaypoint, route = selectRoute, changeZone = showZonePicker,
+        search = updateSearch,
         listPage = changeListPage, routePage = changeRoutePage, rewardPage = changeRewardPage,
         questLink = function(position)
             local entry = entries[position]
@@ -616,6 +642,7 @@ local function build()
     ui:SetScript("OnHide", function(self)
         self:StopMovingOrSizing()
         self.zonePicker:Hide()
+        self.search:ClearFocus()
         if returnTo and returnTo.pinnedZone then
             tab, activeOnly, pinnedZone = returnTo.tab, returnTo.activeOnly, returnTo.pinnedZone
             zone, returnTo = pinnedZone, nil

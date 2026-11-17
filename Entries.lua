@@ -43,7 +43,39 @@ function Entries.Quests(quests, zone)
     return entries
 end
 
-function Entries.AvailableQuests(quests, zone, collapsed)
+local function liveObjectives(quest)
+    if Data.OnQuest(quest.id) and C_QuestLog.GetQuestObjectives then
+        return C_QuestLog.GetQuestObjectives(quest.id)
+    end
+end
+
+function Entries.SearchQuests(quests, query)
+    local lower = strlower or string.lower
+    local function matches(text)
+        return type(text) == "string" and lower(text):find(query, 1, true) ~= nil
+    end
+    local function matchesQuest(quest)
+        if matches(quest.name) then return true end
+        for _, line in ipairs(quest.lines) do
+            if matches(line) then return true end
+        end
+        for _, objective in ipairs(liveObjectives(quest) or {}) do
+            if matches(objective.text) then return true end
+        end
+        for _, sources in ipairs({quest.givers, quest.objectives, quest.finishers}) do
+            for _, source in ipairs(sources) do
+                if matches(source.name) then return true end
+            end
+        end
+    end
+    local result = {}
+    for _, item in ipairs(quests) do
+        if matchesQuest(item.quest) then result[#result + 1] = item end
+    end
+    return result
+end
+
+function Entries.AvailableQuests(quests, zone, collapsed, searching)
     local entries, localQuests, elsewhere, startZones = {}, {}, {}, {}
     local playerLevel, remoteCount = UnitLevel("player"), 0
     for _, result in ipairs(quests) do
@@ -72,14 +104,14 @@ function Entries.AvailableQuests(quests, zone, collapsed)
         }
         return not collapsed[key]
     end
-    if addHeader("local", L.START_IN_THIS_ZONE, #localQuests, 0) then
+    if (not searching or #localQuests > 0) and addHeader("local", L.START_IN_THIS_ZONE, #localQuests, 0) then
         for _, result in ipairs(localQuests) do
             local row = questRow(result, zone, playerLevel)
             row.depth = 1
             entries[#entries + 1] = row
         end
     end
-    if addHeader("elsewhere", L.START_SOMEWHERE_ELSE, remoteCount, 0) then
+    if (not searching or remoteCount > 0) and addHeader("elsewhere", L.START_SOMEWHERE_ELSE, remoteCount, 0) then
         for _, start in ipairs(startZones) do
             local group = elsewhere[start.id]
             if addHeader("zone:" .. start.id, start.name, #group, 1) then
@@ -131,7 +163,7 @@ function Entries.Quest(quest, zone, section)
             entries[#entries + 1] = { title = Data.ItemName(id), subtitle = L.QUEST_STARTING_ITEM, itemID = id }
         end
     elseif section == "objective" then
-        local live = Data.OnQuest(quest.id) and C_QuestLog.GetQuestObjectives and C_QuestLog.GetQuestObjectives(quest.id)
+        local live = liveObjectives(quest)
         local lines = {}
         for _, goal in ipairs(live or {}) do
             if goal.text and goal.text ~= "" then lines[#lines + 1] = goal.text end
