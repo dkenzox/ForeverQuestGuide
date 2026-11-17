@@ -1,6 +1,6 @@
 local _, Guide = ...
 local L, View, Data, NextZone, ZoneMap = Guide.Locale, Guide.View, Guide.Data, Guide.NextZone, Guide.ZoneMap
-local Picker = {}
+local Picker, Rewards = {}, Guide.Rewards
 Guide.ZonePicker = Picker
 
 local pageSize = 8
@@ -48,6 +48,11 @@ local function showLevel(font, entry, player)
     font:SetTextColor(Data.LevelColor(entry.colorLevel, player.level))
 end
 
+local function showXP(picker, load)
+    local quests = picker.xpQuests
+    picker.xp:SetText(quests and Rewards.TotalXP(quests, load) or "—")
+end
+
 local function drawPreview(picker, entry)
     picker.preview:SetShown(entry ~= nil)
     picker.open:SetEnabled(entry ~= nil)
@@ -61,6 +66,16 @@ local function drawPreview(picker, entry)
     picker.starts:SetText(entry.starts or 0)
     picker.active:SetText(entry.active or 0)
     picker.cluster:SetText(entry.cluster or 0)
+    if Data.ready and picker.xpMap ~= mapID then
+        local settings = Guide.Character.Settings()
+        local quests = Data.ZoneQuests(mapID, picker.player, not settings.showTrivial, "both",
+            settings.hideDungeonQuests, true, settings.showEventQuests)
+        picker.xpMap, picker.xpQuests = mapID, quests
+        C_Timer.After(.25, function()
+            if picker:IsShown() and picker.xpQuests == quests then showXP(picker, true) end
+        end)
+    end
+    showXP(picker)
     ZoneMap.Draw(picker.map, mapID, {}, 0, "quests", nil, true, nil, mapID == picker.currentZone)
     picker.map.legend:Hide()
     picker.map.caption:Hide()
@@ -132,14 +147,17 @@ local function buildOptions(picker, pinnedZone)
     end
     for _, entry in ipairs(ranked) do
         if entry.recommended then picker.recommendations[#picker.recommendations + 1] = entry end
-        picker.allOptions[#picker.allOptions + 1] = entry
-        if entry.mapID == pinnedZone then picker.allIndex = #picker.allOptions end
+        if not entry.current then
+            picker.allOptions[#picker.allOptions + 1] = entry
+            if entry.mapID == pinnedZone then picker.allIndex = #picker.allOptions end
+        end
     end
     picker.dataReady = Data.ready
 end
 
 function Picker.Refresh(picker)
-    if not picker:IsShown() or picker.dataReady == Data.ready then return end
+    if not picker:IsShown() then return end
+    if picker.dataReady == Data.ready then showXP(picker); return end
     local selected = picker.options[picker.index]
     local previous = picker.allOptions[picker.allIndex]
     buildOptions(picker, previous and previous.mapID)
@@ -165,10 +183,10 @@ local function toggleMode(picker)
 end
 
 local function stat(parent, x, caption)
-    local tile = frame(parent, 136, 61, "TOPLEFT", x, -385)
-    local amount = label(tile, "GameFontNormalLarge", "TOP", 0, -10, 123)
+    local tile = frame(parent, 102, 61, "TOPLEFT", x, -385)
+    local amount = label(tile, "GameFontNormalLarge", "TOP", 0, -10, 92)
     amount:SetJustifyH("CENTER")
-    local title = label(tile, "GameFontHighlightSmall", "BOTTOM", 0, 10, 124)
+    local title = label(tile, "GameFontHighlightSmall", "BOTTOM", 0, 10, 93)
     title:SetJustifyH("CENTER")
     title:SetText(caption)
     return amount
@@ -210,8 +228,9 @@ function Picker.Create(parent, onPick)
     local mapFrame = frame(preview, 430, 320, "TOPLEFT", 11, -56)
     picker.map = ZoneMap.Create(mapFrame, nil, 420, 310)
     picker.starts = stat(preview, 12, L.ZONE_STARTS)
-    picker.active = stat(preview, 158, L.ZONE_ACTIVE)
-    picker.cluster = stat(preview, 304, L.ZONE_CLUSTER)
+    picker.active = stat(preview, 121, L.ZONE_ACTIVE)
+    picker.cluster = stat(preview, 230, L.ZONE_CLUSTER)
+    picker.xp = stat(preview, 339, L.ZONE_TOTAL_XP)
 
     picker.hint = label(panel, "GameFontHighlightSmall", "BOTTOM", 0, 11, 818)
     picker.hint:SetJustifyH("CENTER")
@@ -256,6 +275,7 @@ end
 function Picker.Open(picker, currentZone, pinnedZone)
     picker.currentZone, picker.recommending = currentZone, false
     picker.player = Data.Player()
+    picker.xpMap, picker.xpQuests = nil, nil
     picker.context:SetText(L.NEXT_ZONE_CONTEXT:format(picker.player.level, Data.ZoneName(currentZone)))
     buildOptions(picker, pinnedZone)
     picker.options, picker.index = picker.allOptions, picker.allIndex

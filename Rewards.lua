@@ -63,21 +63,49 @@ local function moneyText(copper)
     return table.concat(parts, " ")
 end
 
+local function rewardReady(id)
+    return (HaveQuestRewardData and HaveQuestRewardData(id)) or requests[id] == "loaded" or Data.OnQuest(id)
+end
+
+local function questXP(quest, load)
+    local maxLevel = GetMaxPlayerLevel and GetMaxPlayerLevel()
+    if maxLevel and UnitLevel("player") >= maxLevel then return 0, false end
+    local id = quest.id
+    local xp = numberFrom(GetQuestLogRewardXP, id)
+    if xp == 0 and not rewardReady(id) then xp = nil end
+    if xp ~= nil then return xp, false end
+    if load then request(id) end
+    return estimate(quest), true
+end
+
+function Rewards.TotalXP(quests, load)
+    local total, estimates, known, missing, seen = 0, false, 0, false, {}
+    for _, result in ipairs(quests) do
+        local quest = result.quest
+        if not seen[quest.id] then
+            seen[quest.id] = true
+            local xp, estimated = questXP(quest, load)
+            if xp ~= nil then
+                total, known = total + xp, known + 1
+                estimates = estimates or estimated
+            else
+                missing = true
+            end
+        end
+    end
+    if known == 0 and missing then return "—" end
+    local formatted = BreakUpLargeNumbers and BreakUpLargeNumbers(total) or tostring(total)
+    return (estimates and "~" or "") .. formatted .. (missing and "+" or "")
+end
+
 function Rewards.Summary(quest)
     local id = quest.id
-    local ready = HaveQuestRewardData and HaveQuestRewardData(id)
-    if not ready then request(id) end
-    local xp = numberFrom(GetQuestLogRewardXP, id)
+    local ready = rewardReady(id)
+    if not (HaveQuestRewardData and HaveQuestRewardData(id)) then request(id) end
+    local xp, approximate = questXP(quest)
     local money = numberFrom(GetQuestLogRewardMoney, id)
-    if not (ready or requests[id] == "loaded" or Data.OnQuest(id)) then
-        if xp == 0 then xp = nil end
-        if money == 0 then money = nil end
-    end
-    local approximate = xp == nil
-    if approximate then xp = estimate(quest) end
+    if money == 0 and not ready then money = nil end
     local xpMax = UnitXPMax and UnitXPMax("player")
-    local maxLevel = GetMaxPlayerLevel and GetMaxPlayerLevel()
-    if maxLevel and UnitLevel("player") >= maxLevel then xp, approximate = 0, false end
     local xpText
     if xp and xp > 0 then
         local value = (approximate and "~" or "") .. (BreakUpLargeNumbers and BreakUpLargeNumbers(xp) or xp)

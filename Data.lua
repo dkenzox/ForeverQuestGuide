@@ -283,16 +283,26 @@ local function getGivers(groups, starterItems)
     return givers
 end
 
-local function getObjectives(fields)
-    local list = {}
+-- The catalogue includes one Ashenvale Bear point just across the Barrens border.
+local objectiveZoneOverrides = { [98251] = 1440 } -- Never Coming Back
+
+local function restrictPoints(source, allowedZones)
+    local points = {}
+    for _, point in ipairs(source.points) do
+        if allowedZones[point.zone] then points[#points + 1] = point end
+    end
+    if #points == 0 and #source.points > 0 then return end
+    return { kind = source.kind, id = source.id, name = source.name, labelKey = source.labelKey, points = points }
+end
+
+local function getObjectives(fields, routeZones, objectiveZone)
+    local list, itemObjectives = {}, {}
     local objectives = fields[10] or empty
     for group, kind in ipairs(types) do
         for _, spec in ipairs(objectives[group] or empty) do
             if type(spec) == "table" and type(spec[1]) == "number" then
                 if kind == "Item" then
-                    for _, source in ipairs(readItemSources(spec[1])) do
-                        if source.labelKey ~= "ITEM_SOLD_BY" then list[#list + 1] = source end
-                    end
+                    itemObjectives[#itemObjectives + 1] = spec[1]
                 else
                     addEntity(list, kind, spec[1])
                 end
@@ -322,7 +332,55 @@ local function getObjectives(fields)
             end
         end
     end
+    if objectiveZone then
+        routeZones = { [objectiveZone] = true }
+        local scoped = {}
+        for _, source in ipairs(list) do
+            local location = restrictPoints(source, routeZones)
+            if location then scoped[#scoped + 1] = location end
+        end
+        list = scoped
+    else
+        for _, source in ipairs(list) do
+            for _, point in ipairs(source.points) do routeZones[point.zone] = true end
+        end
+    end
+
+    for _, id in ipairs(itemObjectives) do
+        local sources = readItemSources(id)
+        local dropZones, hasRouteDrop = {}, false
+        for _, source in ipairs(sources) do
+            if source.labelKey ~= "ITEM_SOLD_BY" then
+                for _, point in ipairs(source.points) do
+                    dropZones[point.zone] = true
+                    hasRouteDrop = hasRouteDrop or routeZones[point.zone]
+                end
+            end
+        end
+        local onlyZone = next(dropZones)
+        local uniqueZone = onlyZone and not next(dropZones, onlyZone)
+        -- Broad item loot tables do not establish additional quest destinations.
+        local allowed = not objectiveZone and not hasRouteDrop and uniqueZone and dropZones or routeZones
+        for _, source in ipairs(sources) do
+            if source.labelKey ~= "ITEM_SOLD_BY" then
+                local location = restrictPoints(source, allowed)
+                if location then list[#list + 1] = location end
+            end
+        end
+    end
     return list
+end
+
+local donationIDs = {}
+for _, id in ipairs({
+    7791, 7792, 7793, 7794, 7795, 7798, 7799, 7800, 7802, 7803, 7804, 7805,
+    7807, 7808, 7809, 7811, 7813, 7814, 7817, 7818, 7820, 7821, 7822, 7823,
+    7824, 7826, 7827, 7831, 7833, 7834, 7835, 7836,
+    99191, 99192, 99193, 99194, 99196, 99197, 99198, 99199,
+}) do donationIDs[id] = true end
+
+local function isDonation(quest)
+    return donationIDs[quest.id] or quest.name:lower():find("^a donation of%s+") ~= nil
 end
 
 local function indexQuest(id)
@@ -340,8 +398,17 @@ local function indexQuest(id)
         specialization = fields[27], breadcrumb = fields[28], breadcrumbs = fields[29] or empty,
         ranks = fields[30] or empty, nextQuest = fields[15], areaID = fields[14],
         starterItems = starterItems, givers = getGivers(fields[2], starterItems),
-        finishers = getGivers(fields[3]), objectives = getObjectives(fields), areas = {},
+        finishers = getGivers(fields[3]), areas = {},
     }
+    if isDonation(entry) then return end
+    local affected = {}
+    sourceEntries(entry.areas, entry.givers, affected, "start")
+    sourceEntries(entry.areas, entry.finishers, affected, "finish")
+    local catalogZone = zoneForMap(mapByArea[fields[14]])
+    local routeZones = {}
+    for mapID in pairs(affected) do routeZones[mapID] = true end
+    if catalogZone then routeZones[catalogZone] = true end
+    entry.objectives = getObjectives(fields, routeZones, objectiveZoneOverrides[id])
     for _, giver in ipairs(entry.givers) do
         if giver.kind == "Object" and not giver.labelKey then
             for _, objective in ipairs(entry.objectives) do
@@ -355,11 +422,7 @@ local function indexQuest(id)
     for _, nextID in ipairs(fields[13] or empty) do addUnique(entry.after, nextID) end
     if fields[15] and fields[15] > 0 then addUnique(entry.after, fields[15]) end
     quests[id] = entry
-    local affected = {}
-    sourceEntries(entry.areas, entry.givers, affected, "start")
     sourceEntries(entry.areas, entry.objectives, affected, "objective")
-    sourceEntries(entry.areas, entry.finishers, affected, "finish")
-    local catalogZone = zoneForMap(mapByArea[fields[14]])
     if catalogZone and not affected[catalogZone] then
         entry.areas[catalogZone] = { catalog = true }
         affected[catalogZone] = true
@@ -486,6 +549,7 @@ local function questRequirements(quest)
 end
 
 function Data.Status(quest, player)
+    if isDonation(quest) then return "hidden" end
     if Data.Completed(quest.id) then return "done", L.STATUS_DONE end
     if Data.OnQuest(quest.id) then return "active", L.STATUS_ACTIVE end
     if not hasMask(quest.raceMask, player.race) or not hasMask(quest.classMask, player.class) then return "hidden" end
