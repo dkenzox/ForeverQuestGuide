@@ -26,6 +26,7 @@ local render, draw, openQuest
 local activeOnly = false
 local collapsedByZone, questCount = {}, nil
 local searchText, searchGroups = "", {}
+local filterFocus
 
 local function playerZone()
     return Data.ZoneForMap(C_Map.GetBestMapForUnit("player"))
@@ -101,13 +102,16 @@ local function queueRefresh(itemsOnly)
             refreshPins = nil
             local settings = Guide.Character.Settings()
             if Data.ready and currentZone and not settings.hideMinimap then
-                local quests = Data.ZoneQuests(currentZone, Data.Player(), not settings.showTrivial, "both", settings.hideDungeonQuests)
+                local quests = Data.ZoneQuests(currentZone, Data.Player(), not settings.showTrivial, "both", settings.hideDungeonQuests, nil, settings.showEventQuests)
                 Pins.RefreshMinimap(currentZone, quests, openMinimapQuest)
             else
                 Pins.RefreshMinimap()
             end
         end
-        if ui and ui:IsShown() then render(true) end
+        if ui and ui:IsShown() then
+            render(true)
+            Picker.Refresh(ui.zonePicker)
+        end
     end)
 end
 
@@ -212,6 +216,7 @@ draw = function()
     ui.clearWaypoint:SetEnabled(not not (C_Map.ClearUserWaypoint and hasWaypoint()))
     ui.status:SetText(message or (entry and entry.itemStats) or ui.contextStatus or "")
     ui.back:SetShown(detail ~= nil)
+    if filterFocus then ui.hint:SetText(L.PAD_FILTERS) end
 
     local mapEntries, mapIndex = entries, index
     if detail then
@@ -253,6 +258,8 @@ render = function(preserve)
     ui.filter:SetText(settings.showTrivial and L.SHOWING_TRIVIAL or L.HIDING_TRIVIAL)
     ui.dungeons:SetShown(filterable)
     ui.dungeons:SetText(settings.hideDungeonQuests and L.HIDING_DUNGEONS or L.SHOWING_DUNGEONS)
+    ui.eventFilter:SetShown(filterable)
+    ui.eventFilter:SetText(settings.showEventQuests and L.SHOWING_EVENTS or L.HIDING_EVENTS)
     ui.contextStatus, ui.emptyText = nil, L.EMPTY_CATALOG
     entries, dockData, questCount = {}, nil, nil
 
@@ -266,7 +273,7 @@ render = function(preserve)
             local mode
             if category == "gear" then mode = "both" elseif activeOnly then mode = "active" end
             local grouped = browsingQuests and not activeOnly
-            local quests = Data.ZoneQuests(zone, player, not settings.showTrivial, mode, settings.hideDungeonQuests, grouped)
+            local quests = Data.ZoneQuests(zone, player, not settings.showTrivial, mode, settings.hideDungeonQuests, grouped, settings.showEventQuests)
             if browsingQuests then
                 local searching = searchText ~= ""
                 if searching then quests = Entries.SearchQuests(quests, searchText) end
@@ -319,6 +326,7 @@ local function updateSearch(text)
 end
 
 local function selectTab(destination)
+    if filterFocus then filterFocus:UnlockHighlight(); filterFocus = nil end
     ui.search:ClearFocus()
     tab, index, detail, returnTo, message = destination, 1, nil, nil, nil
     render()
@@ -436,17 +444,36 @@ local function toggleFilter()
     queueRefresh()
 end
 
-local function toggleDungeons()
+local function toggleQuestType(setting, matches)
     local key = tabs[tab].key
     if key ~= "quests" and key ~= "gear" then return end
     local settings = Guide.Character.Settings()
-    settings.hideDungeonQuests = not settings.hideDungeonQuests
-    if settings.hideDungeonQuests and detail and Data.IsDungeonQuest(detail.quest) then
+    settings[setting] = not settings[setting]
+    if detail and matches(detail.quest, settings[setting]) then
         detail, returnTo = nil, nil
     end
     message = nil
     render(true)
     queueRefresh()
+end
+
+local function toggleDungeons()
+    toggleQuestType("hideDungeonQuests", function(quest, hidden)
+        return hidden and Data.IsDungeonQuest(quest)
+    end)
+end
+
+local function toggleEvents()
+    toggleQuestType("showEventQuests", function(quest, shown)
+        return not shown and Data.IsEventQuest(quest)
+    end)
+end
+
+local function focusFilter(button)
+    if filterFocus then filterFocus:UnlockHighlight() end
+    filterFocus = button
+    if button then button:LockHighlight() end
+    draw()
 end
 
 local function selectList(position)
@@ -541,6 +568,15 @@ local function onPad(_, key)
         if key == "PAD1" or key == "PAD2" or key == "PADDDOWN" then ui.search:ClearFocus() end
         return
     end
+    if filterFocus then
+        if key == "PAD2" or key == "PADBACK" then focusFilter(nil)
+        elseif key == "PADDLEFT" then focusFilter(ui.eventFilter)
+        elseif key == "PADDRIGHT" then focusFilter(ui.dungeons)
+        elseif key == "PAD1" then
+            if filterFocus == ui.eventFilter then toggleEvents() else toggleDungeons() end
+        end
+        return
+    end
     if key == "PADFORWARD" then showZonePicker()
     elseif key == "PADDUP" and not detail and index == 1 and ui.search:IsShown() then ui.search:SetFocus()
     elseif key == "PADDUP" then moveFocus(-1)
@@ -556,7 +592,7 @@ local function onPad(_, key)
     elseif key == "PAD3" then mark(activePoint())
     elseif key == "PADLSTICK" then clearWaypoint()
     elseif key == "PAD4" then toggleFilter()
-    elseif key == "PADBACK" then toggleDungeons()
+    elseif key == "PADBACK" and ui.dungeons:IsShown() then focusFilter(ui.dungeons)
     elseif key == "PADRSTICK" then
         if not detail then toggleQuestMode()
         elseif detail.section == "rewards" then chooseSection(routeSection)
@@ -594,7 +630,7 @@ end
 
 local function build()
     ui = View.Create(tabs, {
-        close = close, back = back, tab = selectTab, filter = toggleFilter, questMode = toggleQuestMode, dungeons = toggleDungeons,
+        close = close, back = back, tab = selectTab, filter = toggleFilter, questMode = toggleQuestMode, dungeons = toggleDungeons, events = toggleEvents,
         section = chooseSection, clear = clearWaypoint, route = selectRoute, changeZone = showZonePicker,
         search = updateSearch,
         listPage = changeListPage, routePage = changeRoutePage, rewardPage = changeRewardPage,
@@ -645,6 +681,7 @@ local function build()
         elapsed = 0
     end)
     ui:SetScript("OnHide", function(self)
+        if filterFocus then filterFocus:UnlockHighlight(); filterFocus = nil end
         self:StopMovingOrSizing()
         self.zonePicker:Hide()
         self.search:ClearFocus()

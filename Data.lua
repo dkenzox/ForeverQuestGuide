@@ -532,33 +532,58 @@ function Data.Status(quest, player)
     return "possible", L.STATUS_REQUIREMENTS_MET
 end
 
+function Data.LevelColor(level, playerLevel)
+    local color = GetQuestDifficultyColor and GetQuestDifficultyColor(level)
+    if color and color.r then return color.r, color.g, color.b end
+    local delta = level - playerLevel
+    if delta >= 5 then return 1, .2, .2 end
+    if delta >= 3 then return 1, .5, .25 end
+    if delta >= -2 then return 1, .82, 0 end
+    if level > playerLevel - math.floor(playerLevel / 10) - 5 then return .25, .85, .25 end
+    return .6, .6, .6
+end
+
 function Data.Difficulty(quest, player)
     local level = quest.level and quest.level > 0 and quest.level or player.level
-    local color = GetQuestDifficultyColor and GetQuestDifficultyColor(level)
-    if color and color.r then return level, color.r, color.g, color.b end
-    local delta = level - player.level
-    if delta >= 5 then return level, 1, .2, .2 end
-    if delta >= 3 then return level, 1, .5, .25 end
-    if delta >= -2 then return level, 1, .82, 0 end
-    if level > player.level - math.floor(player.level / 10) - 5 then return level, .25, .85, .25 end
-    return level, .6, .6, .6
+    return level, Data.LevelColor(level, player.level)
+end
+
+local function questTag(id)
+    if C_QuestLog.GetQuestTagInfo then
+        local info = C_QuestLog.GetQuestTagInfo(id)
+        return info and info.tagID
+    elseif GetQuestTagInfo then
+        return GetQuestTagInfo(id)
+    end
+end
+
+local eventSorts = {
+    [-21] = true, [-22] = true, [-41] = true, [-364] = true, [-365] = true, [-366] = true,
+    [-368] = true, [-369] = true, [-370] = true, [-374] = true, [-375] = true,
+    [-376] = true, [-378] = true, [-402] = true, [-404] = true,
+}
+local questieEvents
+
+function Data.IsEventQuest(quest)
+    -- Wild Fires variants may come through a provider without a holiday tag.
+    if eventSorts[quest.areaID] or quest.id == 9322 or quest.id == 9323 then return true end
+    if not questieEvents and QuestieLoader and QuestieLoader.ImportModule then
+        local ok, events = pcall(QuestieLoader.ImportModule, QuestieLoader, "QuestieEvent")
+        if ok then questieEvents = events end
+    end
+    if questieEvents and questieEvents.IsEventQuest and questieEvents.IsEventQuest(quest.id) then return true end
+    return questTag(quest.id) == 82 -- World Event
 end
 
 function Data.IsDungeonQuest(quest)
-    local tag
-    if C_QuestLog.GetQuestTagInfo then
-        local info = C_QuestLog.GetQuestTagInfo(quest.id)
-        tag = info and info.tagID
-    elseif GetQuestTagInfo then
-        tag = GetQuestTagInfo(quest.id)
-    end
+    local tag = questTag(quest.id)
     -- Dungeon and Heroic, as used by the client's quest tags.
     if tag and tag ~= 0 then return tag == 81 or tag == 85 end
     local info = quest.areaID and Data.MapInfo(mapByArea[quest.areaID])
     return info and info.mapType == (Enum and Enum.UIMapType and Enum.UIMapType.Dungeon or 4)
 end
 
-function Data.ZoneQuests(mapID, player, hideTrivial, mode, hideDungeons, includeRemote)
+function Data.ZoneQuests(mapID, player, hideTrivial, mode, hideDungeons, includeRemote, showEvents)
     local result = {}
     for _, quest in ipairs(Data.Zone(mapID)) do
         local area = quest.areas[mapID]
@@ -576,7 +601,8 @@ function Data.ZoneQuests(mapID, player, hideTrivial, mode, hideDungeons, include
         end
         local available = eligible and (area.start or startZones)
         if ((active and mode ~= nil) or (available and mode ~= "active"))
-            and not (hideDungeons and Data.IsDungeonQuest(quest)) then
+            and not (hideDungeons and Data.IsDungeonQuest(quest))
+            and (showEvents or not Data.IsEventQuest(quest)) then
             local level, r, g, b = Data.Difficulty(quest, player)
             local trivial = quest.level and quest.level > 0 and math.max(r,g,b) - math.min(r,g,b) < .08
             if active or not (hideTrivial and trivial) then

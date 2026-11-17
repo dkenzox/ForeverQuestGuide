@@ -1,6 +1,6 @@
 # Forever Quest Guide
 
-Atlas de zonas para **World of Warcraft: Forever** (interfaz 16001). Abrí o cerrá la guía con el botón de mapa del minimapa, **/fqg**, el botón **Guía** del mapa mundial o la asignación **Abrir o cerrar la guía del mapa**. El atlas sigue al personaje de forma automática. Usá **Cambiar zona** para explorar otro mapa y **Zona actual** para volver al seguimiento automático. El selector muestra el nivel recomendado de cada zona cuando hay datos. Los pines del minimapa siguen la ubicación del personaje. En el selector, **Adónde ir ahora** (Y) reúne en una lista la zona actual y los destinos de todos los continentes cuyo rango incluye tu nivel o tienen inicios disponibles de nivel similar. Ordena por misiones disponibles, concentración de inicios y misiones activas. Usa la distancia para desempatar cuando el cliente permite calcularla.
+Atlas de zonas para **World of Warcraft: Forever** (interfaz 16001). Abrí o cerrá la guía con el botón de mapa del minimapa, **/fqg**, el botón **Guía** del mapa mundial o la asignación **Abrir o cerrar la guía del mapa**. El atlas sigue al personaje de forma automática. Usá **Cambiar zona** para explorar otro mapa y **Zona actual** para volver al seguimiento automático. El selector muestra el nivel recomendado de cada zona cuando hay datos. Los pines del minimapa siguen la ubicación del personaje. El filtro de eventos oculta por defecto las misiones de temporada identificadas en el catálogo, tanto en Misiones como en Equipo y en los pines. En el selector, **Adónde ir ahora** (Y) reúne en una lista la zona actual y los destinos de todos los continentes con misiones disponibles o rutas activas que encajan con el nivel del personaje. Los dos modos incluyen una vista previa del mapa y ordenan primero por adecuación de nivel, luego por inicios disponibles. Las zonas de la otra facción se muestran al final.
 
 La lista de la zona queda a la izquierda. El mapa, las etapas y las recompensas de la misión seleccionada aparecen a la derecha. Podés recorrer la lista y comparar misiones sin abrir otra pantalla.
 
@@ -37,7 +37,7 @@ El mapa usa las texturas de las zonas exploradas que provee el cliente. Si el ma
 | X / □ | Marcar la ubicación más cercana de la selección |
 | L3 | Borrar el waypoint activo |
 | Y / △ | Mostrar u ocultar misiones grises |
-| Vista / Select | Mostrar u ocultar misiones de mazmorra en la lista y sus pines |
+| Vista / Select | Elegir entre los filtros de mazmorras y eventos. Izquierda o derecha para elegir, A para alternar y B para volver |
 | R3 | Alternar entre misiones disponibles y en curso desde la lista, o entre etapas y recompensas en la ficha |
 
 Podés asignar un botón o combinación libre para abrir la guía desde las asignaciones del juego. Con el ratón, un clic en una misión actualiza el mapa y la ficha. Hacé clic en una etapa para navegar sus ubicaciones. Un clic en un pin de misión abre la ficha y selecciona la ubicación. El clic derecho marca ese punto. En mapas que admiten marcadores personales, **Marcar punto** coloca el marcador del cliente. Para quitarlo, usá **Borrar punto**, **L3** o **/fqg clear**. La guía se cierra al entrar en combate.

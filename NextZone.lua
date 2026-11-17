@@ -75,9 +75,9 @@ local function bestCluster(points, mapID, origin)
     return bestSize, bestDistance
 end
 
-local function zoneSummary(mapID, player, hideDungeons, origin)
+local function zoneSummary(mapID, player, settings, origin)
     local starts, active, points = 0, 0, {}
-    for _, result in ipairs(Data.ZoneQuests(mapID, player, true, "both", hideDungeons)) do
+    for _, result in ipairs(Data.ZoneQuests(mapID, player, true, "both", settings.hideDungeonQuests, nil, settings.showEventQuests)) do
         local quest = result.quest
         if result.status == "active" then
             local ready = C_QuestLog.ReadyForTurnIn and C_QuestLog.ReadyForTurnIn(quest.id)
@@ -104,8 +104,16 @@ local function continent(mapID)
     end
 end
 
-function NextZone.Recommend(currentZone, zones, player, hideDungeons)
-    if not Data.ready then return {} end
+-- Dominant questing faction. The quest catalogue still supplies character-specific counts.
+local zoneFaction = {
+    [1411] = "H", [1412] = "H", [1413] = "H", [1420] = "H", [1421] = "H",
+    [1454] = "H", [1456] = "H", [1458] = "H",
+    [1426] = "A", [1429] = "A", [1431] = "A", [1432] = "A", [1433] = "A",
+    [1436] = "A", [1437] = "A", [1438] = "A", [1439] = "A",
+    [1453] = "A", [1455] = "A", [1457] = "A",
+}
+
+function NextZone.Zones(currentZone, zones, player, settings)
     local hereContinent = continent(currentZone)
     local origin
     if currentZone then
@@ -120,22 +128,35 @@ function NextZone.Recommend(currentZone, zones, player, hideDungeons)
         local zoneContinent = continent(mapID)
         local sameContinent = hereContinent and hereContinent == zoneContinent
         local hubOrigin = (current or sameContinent) and origin or nil
-        local starts, active, cluster, hubTravel = zoneSummary(mapID, player, hideDungeons, hubOrigin)
-        local minLevel, maxLevel = Data.ZoneLevels(mapID)
-        if current or starts > 0 or (minLevel and player.level >= minLevel and player.level <= maxLevel) then
-            local travel = hubTravel or (hubOrigin and distance(hubOrigin, worldPoint(mapID, .5, .5)))
-            result[#result + 1] = {
-                mapID = mapID, name = zone.name, region = (zoneContinent and Data.ZoneName(zoneContinent)) or zone.region,
-                current = current, starts = starts, active = active, cluster = cluster,
-                score = starts + active * 2 + cluster, travel = travel,
-            }
-        end
+        local starts, active, cluster, travel = 0, 0, 0, nil
+        if Data.ready then starts, active, cluster, travel = zoneSummary(mapID, player, settings, hubOrigin) end
+
+        local low, high, estimated = Data.ZoneLevels(mapID)
+        local gap = low and math.max(low - player.level, player.level - high, 0) or math.huge
+        local colorLevel = player.level
+        if low and player.level < low then colorLevel = math.max(low, player.level + 3) end
+        if high and player.level > high then colorLevel = math.min(high, player.level - 3) end
+        local faction = zoneFaction[mapID]
+        local hostile = faction ~= nil and player.faction ~= nil and faction ~= player.faction
+        local useful = starts > 0 or (active > 0 and gap <= 3)
+        local recommended = current or (useful and (not low or (low <= player.level and gap <= 3)))
+        result[#result + 1] = {
+            mapID = mapID, name = zone.name, region = (zoneContinent and Data.ZoneName(zoneContinent)) or zone.region,
+            current = current, starts = starts, active = active, cluster = cluster, travel = travel,
+            low = low, high = high, estimated = estimated, gap = gap, colorLevel = colorLevel,
+            faction = faction, hostile = hostile, recommended = recommended,
+        }
     end
     table.sort(result, function(a, b)
-        if a.score ~= b.score then return a.score > b.score end
+        if a.hostile ~= b.hostile then return not a.hostile end
+        if a.gap ~= b.gap then return a.gap < b.gap end
+        if a.starts ~= b.starts then return a.starts > b.starts end
+        if a.active ~= b.active then return a.active > b.active end
         if a.current ~= b.current then return a.current end
+        if a.cluster ~= b.cluster then return a.cluster > b.cluster end
         local aTravel, bTravel = a.travel or math.huge, b.travel or math.huge
         if aTravel ~= bTravel then return aTravel < bTravel end
+        if a.low ~= b.low and a.low and b.low then return a.low < b.low end
         if a.name ~= b.name then return a.name < b.name end
         return a.mapID < b.mapID
     end)
