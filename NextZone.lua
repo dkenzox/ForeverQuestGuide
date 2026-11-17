@@ -104,55 +104,40 @@ local function continent(mapID)
     end
 end
 
-function NextZone.Recommend(currentZone, zones, player, hideDungeons, otherContinents)
-    if not currentZone or not Data.ready then return {} end
-    local here = Data.MapInfo(currentZone)
+function NextZone.Recommend(currentZone, zones, player, hideDungeons)
+    if not Data.ready then return {} end
     local hereContinent = continent(currentZone)
-    local x, y = playerPosition(currentZone)
-    local origin = worldPoint(currentZone, x or .5, y or .5)
+    local origin
+    if currentZone then
+        local x, y = playerPosition(currentZone)
+        origin = worldPoint(currentZone, x or .5, y or .5)
+    end
+
     local result = {}
     for _, zone in ipairs(zones) do
         local mapID = zone.mapID
         local current = mapID == currentZone
-        local info = Data.MapInfo(mapID)
-        local center = worldPoint(mapID, .5, .5)
         local zoneContinent = continent(mapID)
-        local overseas
-        if hereContinent and zoneContinent then
-            overseas = hereContinent ~= zoneContinent
-        else
-            overseas = origin and center and origin.instance ~= center.instance
-        end
-        local travel = distance(origin, center)
-        local sameRegion = here and info and here.parentMapID == info.parentMapID
-        local nearby = current or (not overseas and ((travel and travel <= 13000)
-            or ((not origin or not center) and sameRegion)))
-        if (otherContinents and overseas) or (not otherContinents and nearby) then
-            local hubOrigin = not otherContinents and origin or nil
-            local starts, active, cluster, hubTravel = zoneSummary(mapID, player, hideDungeons, hubOrigin)
-            if current or starts + active > 0 then
-                local proximity = otherContinents and 0 or (hubTravel or travel or (current and 0 or 5000))
-                result[#result + 1] = {
-                    mapID = mapID, name = zone.name, region = (zoneContinent and Data.ZoneName(zoneContinent)) or zone.region,
-                    current = current,
-                    starts = starts, active = active, cluster = cluster, hubTravel = hubTravel,
-                    score = starts + active * 2 + cluster - proximity / 2000,
-                }
-            end
+        local sameContinent = hereContinent and hereContinent == zoneContinent
+        local hubOrigin = (current or sameContinent) and origin or nil
+        local starts, active, cluster, hubTravel = zoneSummary(mapID, player, hideDungeons, hubOrigin)
+        local minLevel, maxLevel = Data.ZoneLevels(mapID)
+        if current or starts > 0 or (minLevel and player.level >= minLevel and player.level <= maxLevel) then
+            local travel = hubTravel or (hubOrigin and distance(hubOrigin, worldPoint(mapID, .5, .5)))
+            result[#result + 1] = {
+                mapID = mapID, name = zone.name, region = (zoneContinent and Data.ZoneName(zoneContinent)) or zone.region,
+                current = current, starts = starts, active = active, cluster = cluster,
+                score = starts + active * 2 + cluster, travel = travel,
+            }
         end
     end
     table.sort(result, function(a, b)
         if a.score ~= b.score then return a.score > b.score end
         if a.current ~= b.current then return a.current end
+        local aTravel, bTravel = a.travel or math.huge, b.travel or math.huge
+        if aTravel ~= bTravel then return aTravel < bTravel end
+        if a.name ~= b.name then return a.name < b.name end
         return a.mapID < b.mapID
     end)
-    if otherContinents then return result end
-    local shortlist, away = {}, 0
-    for _, entry in ipairs(result) do
-        if entry.current or away < 3 then
-            shortlist[#shortlist + 1] = entry
-            if not entry.current then away = away + 1 end
-        end
-    end
-    return shortlist
+    return result
 end
