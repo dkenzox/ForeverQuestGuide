@@ -518,10 +518,15 @@ local function activate()
     end
 end
 
-local function chooseZone(mapID)
+local function chooseZone(mapID, recommended)
     pinnedZone, zone = mapID, mapID or currentZone
     searchGroups = {}
     index, detail, returnTo, message = 1, nil, nil, nil
+    if recommended then
+        tab, activeOnly = 1, false
+        searchText = ""
+        ui.search:SetText("")
+    end
     render()
 end
 

@@ -134,7 +134,7 @@ local function pinFor(map, index)
     pin:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(self.entry.title)
-        local role = Pins.Label(self.point.stage)
+        local role = Pins.Label(self.point.stage, self.point.labelKey)
         if role then GameTooltip:AddLine(role .. (self.point.name and (" · " .. self.point.name) or ""), .95, .83, .54) end
         GameTooltip:AddLine(("%.1f, %.1f"):format(self.point.x, self.point.y), 1, 1, 1)
         GameTooltip:Show()

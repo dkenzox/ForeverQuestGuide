@@ -12,16 +12,17 @@ local stageByKey = {}
 for _, stage in ipairs(stages) do stageByKey[stage.key] = stage end
 QuestPins.stages = stages
 
-function QuestPins.Label(stage)
+function QuestPins.Label(stage, labelKey)
+    if labelKey == "START_AND_OBJECTIVE" then return L[labelKey] end
     if stage == "start" then return L.PIN_START end
     if stage == "objective" then return L.PIN_OBJECTIVE end
     if stage == "finish" then return L.PIN_FINISH end
 end
 
-function QuestPins.Point(point, stage)
+function QuestPins.Point(point, stage, labelKey)
     return {
         mapID = point.mapID, zone = point.zone, x = point.x, y = point.y,
-        name = point.name, stage = stage,
+        name = point.name, stage = stage, labelKey = labelKey,
     }
 end
 
@@ -35,7 +36,7 @@ function QuestPins.Points(quest, zone, only)
                         local key = ("%s:%d:%.2f:%.2f"):format(stage.key, point.mapID, point.x, point.y)
                         if not seen[key] then
                             seen[key] = true
-                            result[#result + 1] = QuestPins.Point(point, stage.key)
+                            result[#result + 1] = QuestPins.Point(point, stage.key, source.labelKey)
                         end
                     end
                 end
@@ -116,7 +117,7 @@ function QuestPins.RefreshMinimap(zone, quests, onClick)
                         pin:SetScript("OnEnter", function(self)
                             GameTooltip:SetOwner(self, "ANCHOR_LEFT")
                             GameTooltip:SetText(self.quest.name)
-                            GameTooltip:AddLine(QuestPins.Label(self.point.stage), .95, .85, .65)
+                            GameTooltip:AddLine(QuestPins.Label(self.point.stage, self.point.labelKey), .95, .85, .65)
                             GameTooltip:Show()
                         end)
                         pin:SetScript("OnLeave", function(self)

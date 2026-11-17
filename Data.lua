@@ -342,6 +342,16 @@ local function indexQuest(id)
         starterItems = starterItems, givers = getGivers(fields[2], starterItems),
         finishers = getGivers(fields[3]), objectives = getObjectives(fields), areas = {},
     }
+    for _, giver in ipairs(entry.givers) do
+        if giver.kind == "Object" and not giver.labelKey then
+            for _, objective in ipairs(entry.objectives) do
+                if objective.kind == giver.kind and objective.id == giver.id then
+                    giver.labelKey = "START_AND_OBJECTIVE"
+                    break
+                end
+            end
+        end
+    end
     for _, nextID in ipairs(fields[13] or empty) do addUnique(entry.after, nextID) end
     if fields[15] and fields[15] > 0 then addUnique(entry.after, fields[15]) end
     quests[id] = entry

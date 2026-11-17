@@ -19,7 +19,9 @@ local function questRow(result, zone, playerLevel, startZone)
     if startZone then
         subtitle = L.STARTS_IN_ZONE:format(Data.ZoneName(startZone))
     elseif points[1] and points[1].name then
-        subtitle = subtitle .. " · " .. points[1].name
+        local point = points[1]
+        if not active and point.labelKey == "START_AND_OBJECTIVE" then subtitle = L[point.labelKey] end
+        subtitle = subtitle .. " · " .. point.name
     end
     local description = lines ~= "" and lines or subtitle
     if not active and not quest.native and (not quest.min or quest.min <= 0) and result.level > playerLevel then
@@ -135,7 +137,7 @@ local function addLocations(entries, sources, stage, localZone)
                 byZone[point.zone] = group
                 zoneIDs[#zoneIDs + 1] = point.zone
             end
-            group[#group + 1] = Pins.Point(point, stage)
+            group[#group + 1] = Pins.Point(point, stage, source.labelKey)
         end
         table.sort(zoneIDs, function(a, b)
             if (a == localZone) ~= (b == localZone) then return a == localZone end
@@ -155,10 +157,25 @@ local function addLocations(entries, sources, stage, localZone)
     end
 end
 
+local function localLocationsFirst(entries, zone)
+    -- Stable partition keeps catalogue order within local and remote locations.
+    local nextLocal = 1
+    for i, row in ipairs(entries) do
+        if row.mapZone == zone then
+            if i ~= nextLocal then
+                table.remove(entries, i)
+                table.insert(entries, nextLocal, row)
+            end
+            nextLocal = nextLocal + 1
+        end
+    end
+end
+
 function Entries.Quest(quest, zone, section)
     local entries = {}
     if section == "start" then
         addLocations(entries, quest.givers, section, zone)
+        localLocationsFirst(entries, zone)
         for _, id in ipairs(quest.starterItems) do
             entries[#entries + 1] = { title = Data.ItemName(id), subtitle = L.QUEST_STARTING_ITEM, itemID = id }
         end
