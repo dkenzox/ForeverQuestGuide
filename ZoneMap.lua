@@ -28,13 +28,15 @@ local function tileFileSize(pixels, maximum)
     return math.min(size, maximum)
 end
 
-local function overlayTexture(map, i, file, x, y, width, height, scale, texCoords, front)
+local function overlayTexture(map, i, file, x, y, width, height, scale, texCoords, sublevel)
     local texture = map.overlays[i]
     if not texture then
         texture = map.canvas:CreateTexture(nil, "ARTWORK")
         map.overlays[i] = texture
     end
-    texture:SetDrawLayer("ARTWORK", front and 2 or 1)
+    texture:SetDrawLayer("ARTWORK", sublevel)
+    local brightness = sublevel == 1 and .84 or 1
+    texture:SetVertexColor(brightness, brightness, brightness, 1)
     texture:ClearAllPoints()
     texture:SetPoint("TOPLEFT", map.canvas, "TOPLEFT", x * scale, -y * scale)
     texture:SetSize(width * scale, height * scale)
@@ -44,29 +46,36 @@ local function overlayTexture(map, i, file, x, y, width, height, scale, texCoord
 end
 
 local function loadOverlays(map, zone, layer, scale)
-    local seen, index = {}, 0
-    local function add(file, x, y, w, h, coords, front)
+    local seen, exploredAreas, index = {}, {}, 0
+    local function add(file, x, y, w, h, coords, sublevel)
         if not (file and x and y and w and h and w > 0 and h > 0) then return end
         local key = ("%s:%.0f:%.0f"):format(file, x, y)
         if seen[key] then return end
         seen[key] = true
         index = index + 1
-        overlayTexture(map, index, file, x, y, w, h, scale, coords, front)
+        overlayTexture(map, index, file, x, y, w, h, scale, coords, sublevel)
     end
+
     local tw, th = layer.tileWidth, layer.tileHeight
+    local function addArea(files, offsetX, offsetY, width, height, sublevel)
+        local cols = math.ceil(width / tw)
+        for i, file in ipairs(files) do
+            local x, y = (i - 1) % cols * tw, math.floor((i - 1) / cols) * th
+            local w, h = math.min(tw, width - x), math.min(th, height - y)
+            if w > 0 and h > 0 then
+                add(file, offsetX + x, offsetY + y, w, h,
+                    {0, w / tileFileSize(w, tw), 0, h / tileFileSize(h, th)}, sublevel)
+            end
+        end
+    end
+
     local explored = C_MapExplorationInfo and C_MapExplorationInfo.GetExploredMapTextures
         and C_MapExplorationInfo.GetExploredMapTextures(zone)
     for _, area in ipairs(explored or {}) do
+        local width, height, x, y = area.textureWidth, area.textureHeight, area.offsetX, area.offsetY
+        exploredAreas[("%d:%d:%d:%d"):format(width, height, x, y)] = true
         if not area.isShownByMouseOver then
-            local cols = math.ceil(area.textureWidth / tw)
-            for i, file in ipairs(area.fileDataIDs or {}) do
-                local x, y = (i - 1) % cols * tw, math.floor((i - 1) / cols) * th
-                local w, h = math.min(tw, area.textureWidth - x), math.min(th, area.textureHeight - y)
-                if w > 0 and h > 0 then
-                    add(file, area.offsetX + x, area.offsetY + y, w, h,
-                        {0, w / tileFileSize(w, tw), 0, h / tileFileSize(h, th)}, area.isDrawOnTopLayer)
-                end
-            end
+            addArea(area.fileDataIDs or {}, x, y, width, height, area.isDrawOnTopLayer and 3 or 2)
         end
     end
 
@@ -80,11 +89,28 @@ local function loadOverlays(map, zone, layer, scale)
                         local anchor, _, relative, x, y = texture:GetPoint()
                         if anchor == "TOPLEFT" and relative == "TOPLEFT" and x and y then
                             add(texture:GetTexture(), x, -y, texture:GetWidth(), texture:GetHeight(),
-                                {texture:GetTexCoord()})
+                                {texture:GetTexCoord()}, 2)
                         end
                     end
                 end
             end
+        end
+    end
+
+    local artID = C_Map.GetMapArtID and C_Map.GetMapArtID(zone)
+    local reveal = artID and Guide.MapReveal and Guide.MapReveal[artID]
+    if not reveal then return end
+    local keys = {}
+    for key in pairs(reveal) do
+        if not exploredAreas[key] then keys[#keys + 1] = key end
+    end
+    table.sort(keys)
+    for _, key in ipairs(keys) do
+        local width, height, x, y = key:match("^(%d+):(%d+):(%d+):(%d+)$")
+        if width then
+            local files = {}
+            for id in reveal[key]:gmatch("%d+") do files[#files + 1] = tonumber(id) end
+            addArea(files, tonumber(x), tonumber(y), tonumber(width), tonumber(height), 1)
         end
     end
 end

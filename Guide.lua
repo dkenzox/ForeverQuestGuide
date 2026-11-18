@@ -271,11 +271,9 @@ render = function(preserve)
         if not Data.ready then
             ui.emptyText = L.LOADING
         else
-            local mode
-            if category == "gear" then mode = "both" elseif activeOnly then mode = "active" end
             local grouped = browsingQuests and not activeOnly
-            local quests = Data.ZoneQuests(zone, player, not settings.showTrivial, mode, settings.hideDungeonQuests, grouped, settings.showEventQuests)
             if browsingQuests then
+                local quests = Data.ZoneQuestList(zone, player, settings, activeOnly and "active" or nil)
                 local searching = searchText ~= ""
                 if searching then quests = Entries.SearchQuests(quests, searchText) end
                 if grouped then
@@ -287,6 +285,8 @@ render = function(preserve)
                 ui.emptyText = searching and L.NO_QUEST_MATCHES or (activeOnly and L.EMPTY_ACTIVE or L.EMPTY_AVAILABLE)
                 ui.contextStatus = Data.IsNative() and L.STATUS_NATIVE_SOURCE or (activeOnly and L.ACTIVE_QUESTS or L.QUEST_ORDER)
             else
+                local quests = Data.ZoneQuests(zone, player, not settings.showTrivial, "both",
+                    settings.hideDungeonQuests, nil, settings.showEventQuests)
                 local waiting
                 entries, waiting = Entries.Gear(zone, player, quests)
                 ui.emptyText = waiting and L.LOADING_EQUIPMENT or L.EMPTY_GEAR
@@ -546,15 +546,13 @@ local function activate()
     end
 end
 
-local function chooseZone(mapID, recommended)
+local function chooseZone(mapID)
     pinnedZone, zone = mapID, mapID or currentZone
     searchGroups = {}
     index, detail, returnTo, message = 1, nil, nil, nil
-    if recommended then
-        tab, activeOnly = 1, false
-        searchText = ""
-        ui.search:SetText("")
-    end
+    tab, activeOnly = 1, false
+    searchText = ""
+    ui.search:SetText("")
     render()
 end
 
@@ -775,6 +773,7 @@ events:SetScript("OnEvent", function(_, event, arg, success)
         if ui and ui:IsShown() then
             ui.map.zone = false
             render(true)
+            Picker.RefreshMap(ui.zonePicker)
         end
     elseif event == "USER_WAYPOINT_UPDATED" then
         if ui and ui:IsShown() then draw() end

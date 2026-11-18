@@ -58,8 +58,9 @@ local function showXP(picker, load)
             if entry.xpQuests then
                 local rowXP = amount
                 if entry.xpQuests ~= picker.xpQuests then rowXP = Rewards.TotalXP(entry.xpQuests, load) end
-                local summary = entry.starts == 1 and L.ZONE_ROW_START_XP:format(rowXP)
-                    or L.ZONE_ROW_STARTS_XP:format(entry.starts, rowXP)
+                local count = #entry.xpQuests
+                local summary = count == 1 and L.ZONE_ROW_QUEST_XP:format(rowXP)
+                    or L.ZONE_ROW_QUESTS_XP:format(count, rowXP)
                 row.count:SetText(summary)
             else
                 row.count:SetText("")
@@ -148,7 +149,7 @@ local function selectZone(picker)
     picker:Hide()
     local mapID = entry.mapID
     if picker.recommending and entry.current then mapID = nil end
-    picker.onPick(mapID, picker.recommending)
+    picker.onPick(mapID)
 end
 
 local function rankRecommendations(picker)
@@ -192,6 +193,12 @@ local function buildOptions(picker, pinnedZone)
     end
     if picker.recommending then rankRecommendations(picker) end
     picker.dataReady = Data.ready
+end
+
+function Picker.RefreshMap(picker)
+    if not picker:IsShown() then return end
+    picker.map.zone = false
+    drawPreview(picker, picker.options[picker.index])
 end
 
 function Picker.Refresh(picker, questStateChanged, currentZone)

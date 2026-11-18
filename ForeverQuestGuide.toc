@@ -3,7 +3,7 @@
 ## Notes: Controller-friendly zone atlas for quests, gear, mining, herbalism, and fishing.
 ## Notes-esES: Atlas de zona con mando para misiones, equipo, minería, herboristería y pesca.
 ## Notes-esMX: Atlas de zona con mando para misiones, equipo, minería, herboristería y pesca.
-## Version: 0.3.12
+## Version: 0.3.13
 ## OptionalDeps: QuestieDB, NorgannonDB, GatherLite, Questie, HereBeDragons
 ## SavedVariablesPerCharacter: ForeverQuestGuideCharacter
 ## IconTexture: Interface\Icons\INV_Misc_Map_01
@@ -21,6 +21,7 @@ ResourceNames.lua
 FishData.lua
 Resources.lua
 QuestPins.lua
+MapReveal.lua
 ZoneMap.lua
 RewardView.lua
 View.lua

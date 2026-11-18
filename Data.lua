@@ -685,6 +685,11 @@ function Data.ZoneQuests(mapID, player, hideTrivial, mode, hideDungeons, include
     return result
 end
 
+function Data.ZoneQuestList(mapID, player, settings, mode)
+    return Data.ZoneQuests(mapID, player, not settings.showTrivial, mode, settings.hideDungeonQuests,
+        mode ~= "active", settings.showEventQuests)
+end
+
 function Data.Rewards(questID)
     local result, seen = {}, {}
     local function add(id, kind, count, name, quality, usable)

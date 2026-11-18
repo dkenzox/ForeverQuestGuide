@@ -78,24 +78,22 @@ end
 local function zoneSummary(mapID, player, settings, origin)
     local starts, active, points, xpQuests = 0, 0, {}, {}
     local hasNearLevelStart = false
-    local quests = Data.ZoneQuests(mapID, player, not settings.showTrivial, "both",
-        settings.hideDungeonQuests, nil, settings.showEventQuests)
+    local quests = Data.ZoneQuestList(mapID, player, settings, "both")
     for _, result in ipairs(quests) do
         local quest = result.quest
         if result.status == "active" then
             local ready = C_QuestLog.ReadyForTurnIn and C_QuestLog.ReadyForTurnIn(quest.id)
             local stage = ready and "finish" or "objective"
-            if quest.areas[mapID][stage] then
-                active = active + 1
-                xpQuests[#xpQuests + 1] = result
-            end
+            if quest.areas[mapID][stage] then active = active + 1 end
         else
-            starts = starts + 1
-            if result.level >= player.level - 2 and result.level <= player.level + 3 then
-                hasNearLevelStart = true
-            end
             xpQuests[#xpQuests + 1] = result
-            addPoints(points, quest, mapID, "start")
+            if not result.startZones then
+                starts = starts + 1
+                if result.level >= player.level - 2 and result.level <= player.level + 3 then
+                    hasNearLevelStart = true
+                end
+                addPoints(points, quest, mapID, "start")
+            end
         end
     end
     local cluster, travel = bestCluster(points, mapID, origin)
