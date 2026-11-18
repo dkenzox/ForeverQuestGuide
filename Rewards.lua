@@ -79,7 +79,7 @@ local function questXP(quest, load)
 end
 
 function Rewards.TotalXP(quests, load)
-    local total, estimates, known, missing, seen = 0, false, 0, false, {}
+    local total, estimates, known, missing, seen = 0, 0, 0, 0, {}
     for _, result in ipairs(quests) do
         local quest = result.quest
         if not seen[quest.id] then
@@ -87,15 +87,15 @@ function Rewards.TotalXP(quests, load)
             local xp, estimated = questXP(quest, load)
             if xp ~= nil then
                 total, known = total + xp, known + 1
-                estimates = estimates or estimated
+                if estimated then estimates = estimates + 1 end
             else
-                missing = true
+                missing = missing + 1
             end
         end
     end
-    if known == 0 and missing then return "—" end
+    if known == 0 and missing > 0 then return "—", known, missing, estimates end
     local formatted = BreakUpLargeNumbers and BreakUpLargeNumbers(total) or tostring(total)
-    return (estimates and "~" or "") .. formatted .. (missing and "+" or "")
+    return (estimates > 0 and "~" or "") .. formatted .. (missing > 0 and "+" or ""), known, missing, estimates
 end
 
 function Rewards.Summary(quest)

@@ -98,8 +98,9 @@ local function queueRefresh(itemsOnly)
     refreshPending = true
     C_Timer.After(.08, function()
         refreshPending = nil
-        if refreshPins then
-            refreshPins = nil
+        local questStateChanged = refreshPins
+        refreshPins = nil
+        if questStateChanged then
             local settings = Guide.Character.Settings()
             if Data.ready and currentZone and not settings.hideMinimap then
                 local quests = Data.ZoneQuests(currentZone, Data.Player(), not settings.showTrivial, "both", settings.hideDungeonQuests, nil, settings.showEventQuests)
@@ -110,7 +111,7 @@ local function queueRefresh(itemsOnly)
         end
         if ui and ui:IsShown() then
             render(true)
-            Picker.Refresh(ui.zonePicker)
+            Picker.Refresh(ui.zonePicker, questStateChanged, currentZone)
         end
     end)
 end

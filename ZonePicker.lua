@@ -49,8 +49,16 @@ local function showLevel(font, entry, player)
 end
 
 local function showXP(picker, load)
-    local quests = picker.xpQuests
-    picker.xp:SetText(quests and Rewards.TotalXP(quests, load) or "—")
+    local amount, known, missing, estimated = "—", 0, 0, 0
+    if picker.xpQuests then amount, known, missing, estimated = Rewards.TotalXP(picker.xpQuests, load) end
+    picker.xp:SetText(amount)
+    if GameTooltip:IsOwned(picker.xpTile) then
+        GameTooltip:SetText(L.ZONE_TOTAL_XP)
+        GameTooltip:AddLine(L.ZONE_XP_SCOPE:format(picker.player.level), 1, 1, 1, true)
+        if estimated > 0 then GameTooltip:AddLine(L.ZONE_XP_ESTIMATED:format(estimated), 1, .82, 0) end
+        if missing > 0 then GameTooltip:AddLine(L.ZONE_XP_MISSING:format(missing, known + missing), 1, .82, 0) end
+        GameTooltip:Show()
+    end
 end
 
 local function drawPreview(picker, entry)
@@ -66,14 +74,14 @@ local function drawPreview(picker, entry)
     picker.starts:SetText(entry.starts or 0)
     picker.active:SetText(entry.active or 0)
     picker.cluster:SetText(entry.cluster or 0)
-    if Data.ready and picker.xpMap ~= mapID then
-        local settings = Guide.Character.Settings()
-        local quests = Data.ZoneQuests(mapID, picker.player, not settings.showTrivial, "both",
-            settings.hideDungeonQuests, true, settings.showEventQuests)
-        picker.xpMap, picker.xpQuests = mapID, quests
-        C_Timer.After(.25, function()
-            if picker:IsShown() and picker.xpQuests == quests then showXP(picker, true) end
-        end)
+    local quests = entry.xpQuests
+    if picker.xpQuests ~= quests then
+        picker.xpQuests = quests
+        if quests then
+            C_Timer.After(.25, function()
+                if picker:IsShown() and picker.xpQuests == quests then showXP(picker, true) end
+            end)
+        end
     end
     showXP(picker)
     ZoneMap.Draw(picker.map, mapID, {}, 0, "quests", nil, true, nil, mapID == picker.currentZone)
@@ -155,11 +163,13 @@ local function buildOptions(picker, pinnedZone)
     picker.dataReady = Data.ready
 end
 
-function Picker.Refresh(picker)
+function Picker.Refresh(picker, questStateChanged, currentZone)
     if not picker:IsShown() then return end
-    if picker.dataReady == Data.ready then showXP(picker); return end
+    if not questStateChanged and picker.dataReady == Data.ready then showXP(picker); return end
     local selected = picker.options[picker.index]
-    local previous = picker.allOptions[picker.allIndex]
+    local previous = picker.allOptions[picker.recommending and picker.allIndex or picker.index]
+    picker.currentZone, picker.player = currentZone, Data.Player()
+    picker.context:SetText(L.NEXT_ZONE_CONTEXT:format(picker.player.level, Data.ZoneName(currentZone)))
     buildOptions(picker, previous and previous.mapID)
     picker.options = picker.recommending and picker.recommendations or picker.allOptions
     picker.index = picker.recommending and 1 or picker.allIndex
@@ -189,7 +199,7 @@ local function stat(parent, x, caption)
     local title = label(tile, "GameFontHighlightSmall", "BOTTOM", 0, 10, 93)
     title:SetJustifyH("CENTER")
     title:SetText(caption)
-    return amount
+    return amount, tile
 end
 
 function Picker.Create(parent, onPick)
@@ -230,7 +240,17 @@ function Picker.Create(parent, onPick)
     picker.starts = stat(preview, 12, L.ZONE_STARTS)
     picker.active = stat(preview, 121, L.ZONE_ACTIVE)
     picker.cluster = stat(preview, 230, L.ZONE_CLUSTER)
-    picker.xp = stat(preview, 339, L.ZONE_TOTAL_XP)
+    picker.xp, picker.xpTile = stat(preview, 339, L.ZONE_TOTAL_XP)
+    picker.xpTile:EnableMouse(true)
+    picker.xpTile:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        showXP(picker)
+    end)
+    local function hideXPTooltip(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end
+    picker.xpTile:SetScript("OnLeave", hideXPTooltip)
+    picker.xpTile:SetScript("OnHide", hideXPTooltip)
 
     picker.hint = label(panel, "GameFontHighlightSmall", "BOTTOM", 0, 11, 818)
     picker.hint:SetJustifyH("CENTER")
@@ -275,7 +295,7 @@ end
 function Picker.Open(picker, currentZone, pinnedZone)
     picker.currentZone, picker.recommending = currentZone, false
     picker.player = Data.Player()
-    picker.xpMap, picker.xpQuests = nil, nil
+    picker.xpQuests = nil
     picker.context:SetText(L.NEXT_ZONE_CONTEXT:format(picker.player.level, Data.ZoneName(currentZone)))
     buildOptions(picker, pinnedZone)
     picker.options, picker.index = picker.allOptions, picker.allIndex

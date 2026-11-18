@@ -76,20 +76,24 @@ local function bestCluster(points, mapID, origin)
 end
 
 local function zoneSummary(mapID, player, settings, origin)
-    local starts, active, points = 0, 0, {}
+    local starts, active, points, xpQuests = 0, 0, {}, {}
     for _, result in ipairs(Data.ZoneQuests(mapID, player, true, "both", settings.hideDungeonQuests, nil, settings.showEventQuests)) do
         local quest = result.quest
         if result.status == "active" then
             local ready = C_QuestLog.ReadyForTurnIn and C_QuestLog.ReadyForTurnIn(quest.id)
             local stage = ready and "finish" or "objective"
-            if quest.areas[mapID][stage] then active = active + 1 end
+            if quest.areas[mapID][stage] then
+                active = active + 1
+                xpQuests[#xpQuests + 1] = result
+            end
         elseif result.level >= player.level - 2 and result.level <= player.level + 3 then
             starts = starts + 1
+            xpQuests[#xpQuests + 1] = result
             addPoints(points, quest, mapID, "start")
         end
     end
     local cluster, travel = bestCluster(points, mapID, origin)
-    return starts, active, cluster, travel
+    return starts, active, cluster, travel, xpQuests
 end
 
 local function continent(mapID)
@@ -128,8 +132,10 @@ function NextZone.Zones(currentZone, zones, player, settings)
         local zoneContinent = continent(mapID)
         local sameContinent = hereContinent and hereContinent == zoneContinent
         local hubOrigin = (current or sameContinent) and origin or nil
-        local starts, active, cluster, travel = 0, 0, 0, nil
-        if Data.ready then starts, active, cluster, travel = zoneSummary(mapID, player, settings, hubOrigin) end
+        local starts, active, cluster, travel, xpQuests = 0, 0, 0, nil, nil
+        if Data.ready then
+            starts, active, cluster, travel, xpQuests = zoneSummary(mapID, player, settings, hubOrigin)
+        end
 
         local low, high, estimated = Data.ZoneLevels(mapID)
         local gap = low and math.max(low - player.level, player.level - high, 0) or math.huge
@@ -142,7 +148,7 @@ function NextZone.Zones(currentZone, zones, player, settings)
         local recommended = current or (useful and (not low or (low <= player.level and gap <= 3)))
         result[#result + 1] = {
             mapID = mapID, name = zone.name, region = (zoneContinent and Data.ZoneName(zoneContinent)) or zone.region,
-            current = current, starts = starts, active = active, cluster = cluster, travel = travel,
+            current = current, starts = starts, active = active, cluster = cluster, travel = travel, xpQuests = xpQuests,
             low = low, high = high, estimated = estimated, gap = gap, colorLevel = colorLevel,
             faction = faction, hostile = hostile, recommended = recommended,
         }
