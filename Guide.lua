@@ -206,7 +206,9 @@ draw = function()
         local rowIndex = detail and routeIndex or 0
         local itemIndex = focus == "rewards" and rewardIndex or 0
         if focus == "chain" then
-            if not data.chain then data.chain, data.chainCurrent = Entries.Chain(quest, Data.Player()) end
+            if not data.chain then
+                data.chain, data.chainCurrent, data.chainName = Entries.Chain(quest, Data.Player())
+            end
             detail.chainIndex = math.max(1, math.min(detail.chainIndex or data.chainCurrent, #data.chain))
             local step = data.chain[detail.chainIndex]
             if not data.chainRewards or data.chainRewardQuest ~= step.quest then
@@ -217,7 +219,7 @@ draw = function()
             rewards = data.chainRewards
             detail.chainRewardIndex = math.max(1, math.min(detail.chainRewardIndex or 1, #rewards))
             itemIndex = detail.chainRewardIndex
-            context = L.QUEST_CHAIN .. " · " .. step.subtitle
+            context = L.CHAIN_SERIES .. " · " .. data.chainName
         end
         ui.detail:SetWordWrap(false)
         ui.detail:SetText(context)
@@ -546,8 +548,10 @@ local function selectReward(position)
 end
 
 local function changeRoutePage(offset)
-    local position = detail and detail.section == "chain" and detail.chainIndex or routeIndex
-    selectRoute(position + offset * View.detailPageSize)
+    local inChain = detail and detail.section == "chain"
+    local position = inChain and detail.chainIndex or routeIndex
+    local size = inChain and View.chainPageSize or View.detailPageSize
+    selectRoute(position + offset * size)
 end
 
 local function changeRewardPage(offset)

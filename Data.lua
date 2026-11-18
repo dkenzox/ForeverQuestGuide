@@ -11,7 +11,7 @@ local quests, zones, itemsByQuest, startersByQuest = {}, {}, {}, {}
 local names, positions, itemSources, mapInfo = {}, {}, {}, {}
 local zoneCache = {}
 local chainBefore, chainAfter = {}, {}
-local chainPriority = { leads = 1, during = 2, alternative = 3, required = 4 }
+local chainPriority = { leads = 1, during = 2, alternative = 3, required = 4, on_accept = 5 }
 local questFields = {
     "name", "startedBy", "finishedBy", "requiredLevel", "questLevel", "requiredRaces", "requiredClasses",
     "objectivesText", "triggerEnd", "objectives", "preQuestGroup", "preQuestSingle", "childQuests",
@@ -400,7 +400,7 @@ local function indexQuestLinks(quest, children)
     for _, id in ipairs(prerequisites) do
         linkQuest(math.abs(id), quest.id, alternate and "alternative" or "required")
     end
-    linkQuest(quest.parent, quest.id, "during")
+    linkQuest(quest.parent, quest.id, "on_accept")
     linkQuest(quest.fromQuest, quest.id, "during")
     linkQuest(quest.id, quest.nextQuest, "leads")
     linkQuest(quest.id, quest.breadcrumb, "leads")
