@@ -23,6 +23,8 @@ Para misiones y equipo, la guía usa **QuestieDB** (contrato 3), **NorgannonDB**
 
 La vista previa y el atlas usan las texturas exploradas del cliente y completan las áreas sin explorar con las referencias de OpenMap cuando hay datos para el mapa. Los marcadores del minimapa usan HereBeDragons, incluido en GatherLite y Questie. Podés activarlos o desactivarlos con **/fqg minimap** si ya usás otros pines. En el minimapa se muestran los inicios disponibles y los objetivos y entregas de misiones activas.
 
+Las misiones con vínculos en el catálogo muestran **Cadena**. Abrila desde la ficha de la misión (o con **Y** en el mando) para ver requisitos previos, continuaciones, rutas y las recompensas de cada paso. **B** vuelve a la ruta de la misión original.
+
 ## Mando y ratón
 
 | Entrada | Acción |

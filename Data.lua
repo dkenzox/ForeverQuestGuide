@@ -10,6 +10,8 @@ local mapByArea = { [17] = 1413, [331] = 1440, [406] = 1442 }
 local quests, zones, itemsByQuest, startersByQuest = {}, {}, {}, {}
 local names, positions, itemSources, mapInfo = {}, {}, {}, {}
 local zoneCache = {}
+local chainBefore, chainAfter = {}, {}
+local chainPriority = { leads = 1, during = 2, alternative = 3, required = 4 }
 local questFields = {
     "name", "startedBy", "finishedBy", "requiredLevel", "questLevel", "requiredRaces", "requiredClasses",
     "objectivesText", "triggerEnd", "objectives", "preQuestGroup", "preQuestSingle", "childQuests",
@@ -383,6 +385,29 @@ local function isDonation(quest)
     return donationIDs[quest.id] or quest.name:lower():find("^a donation of%s+") ~= nil
 end
 
+local function linkQuest(from, to, relation)
+    if not from or not to or from <= 0 or to <= 0 or from == to then return end
+    chainAfter[from] = chainAfter[from] or {}
+    chainBefore[to] = chainBefore[to] or {}
+    local previous = chainAfter[from][to]
+    if previous and chainPriority[previous] >= chainPriority[relation] then return end
+    chainAfter[from][to], chainBefore[to][from] = relation, relation
+end
+
+local function indexQuestLinks(quest, children)
+    local alternate = #quest.anyBefore > 1
+    local prerequisites = #quest.anyBefore > 0 and quest.anyBefore or quest.allBefore
+    for _, id in ipairs(prerequisites) do
+        linkQuest(math.abs(id), quest.id, alternate and "alternative" or "required")
+    end
+    linkQuest(quest.parent, quest.id, "during")
+    linkQuest(quest.fromQuest, quest.id, "during")
+    linkQuest(quest.id, quest.nextQuest, "leads")
+    linkQuest(quest.id, quest.breadcrumb, "leads")
+    for _, id in ipairs(children) do linkQuest(quest.id, id, "leads") end
+    for _, id in ipairs(quest.breadcrumbs) do linkQuest(id, quest.id, "leads") end
+end
+
 local function indexQuest(id)
     local fields = database.Quest.GetAll(id, questFields)
     if not fields or not fields[1] then return end
@@ -392,7 +417,7 @@ local function indexQuest(id)
     local entry = {
         id = id, name = fields[1], min = fields[4], level = fields[5], raceMask = fields[6], classMask = fields[7],
         lines = fields[8] or empty, allBefore = fields[11] or empty, anyBefore = fields[12] or empty,
-        after = {}, max = fields[17], parent = fields[18], untilQuest = fields[19],
+        max = fields[17], parent = fields[18], untilQuest = fields[19],
         fromQuest = fields[20], disabledBy = fields[21], excludes = fields[22] or empty,
         skill = fields[23], minRep = fields[24], maxRep = fields[25], spell = fields[26],
         specialization = fields[27], breadcrumb = fields[28], breadcrumbs = fields[29] or empty,
@@ -419,9 +444,8 @@ local function indexQuest(id)
             end
         end
     end
-    for _, nextID in ipairs(fields[13] or empty) do addUnique(entry.after, nextID) end
-    if fields[15] and fields[15] > 0 then addUnique(entry.after, fields[15]) end
     quests[id] = entry
+    indexQuestLinks(entry, fields[13] or empty)
     sourceEntries(entry.areas, entry.objectives, affected, "objective")
     if catalogZone and not affected[catalogZone] then
         entry.areas[catalogZone] = { catalog = true }
@@ -489,6 +513,11 @@ function Data.Quest(id)
     return quests[id]
 end
 
+function Data.ChainLinks(questID, preceding)
+    local links = preceding and chainBefore or chainAfter
+    return links[questID] or empty
+end
+
 function Data.Zone(mapID)
     if Data.IsNative() then return Native.Map(mapID) end
     return zones[mapID] or empty
@@ -497,6 +526,21 @@ function Data.ItemName(id) return entityName("Item", id) end
 
 local function hasMask(mask, flag)
     return not mask or mask <= 0 or not flag or math.floor(mask / flag) % 2 == 1
+end
+
+function Data.HasChain(quest, player)
+    if not (chainBefore[quest.id] or chainAfter[quest.id]) then return false end
+    player = player or Data.Player()
+    local function compatible(links)
+        for id in pairs(links or empty) do
+            local candidate = quests[id]
+            if candidate and hasMask(candidate.raceMask, player.race) and hasMask(candidate.classMask, player.class) then
+                return true
+            end
+        end
+        return false
+    end
+    return compatible(chainBefore[quest.id]) or compatible(chainAfter[quest.id])
 end
 
 function Data.Player()

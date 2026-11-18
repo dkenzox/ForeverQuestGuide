@@ -164,6 +164,7 @@ end
 
 local function activePoint()
     local quest, entry = selectedQuest(), entries[index]
+    if detail and detail.section == "chain" then return end
     if not quest or (not detail and entry.startZone) then return nearest(entry) end
     return routePoint(getDock(quest), detail and routeSection or preferredStage(quest), detail and routeIndex or 1)
 end
@@ -184,6 +185,9 @@ draw = function()
     local point = activePoint()
     local mapZone = zone
     local highlighted, selectedStage
+    local hasChain = quest and Data.HasChain(quest)
+    ui.chain:SetShown(not not hasChain)
+    ui.detailTitle:SetWidth(hasChain and 432 or 525)
     if quest then
         local data = getDock(quest)
         local stage = detail and routeSection or previewStage(quest)
@@ -197,12 +201,28 @@ draw = function()
         ui.detailTitle:SetText(Entries.QuestTitle(quest, Data.Difficulty(quest, Data.Player())))
         local context = eligibility(quest)
         if tabs[tab].key == "gear" and entry and entry.summary then context = context .. " · " .. entry.summary end
+        local focus = detail and detail.section
+        local rewards = data.sections.rewards
+        local rowIndex = detail and routeIndex or 0
+        local itemIndex = focus == "rewards" and rewardIndex or 0
+        if focus == "chain" then
+            if not data.chain then data.chain, data.chainCurrent = Entries.Chain(quest, Data.Player()) end
+            detail.chainIndex = math.max(1, math.min(detail.chainIndex or data.chainCurrent, #data.chain))
+            local step = data.chain[detail.chainIndex]
+            if not data.chainRewards or data.chainRewardQuest ~= step.quest then
+                data.chainRewards = Entries.Quest(step.quest, zone, "rewards")
+                data.chainRewardQuest = step.quest
+            end
+            locations, location, rowIndex = data.chain, step, detail.chainIndex
+            rewards = data.chainRewards
+            detail.chainRewardIndex = math.max(1, math.min(detail.chainRewardIndex or 1, #rewards))
+            itemIndex = detail.chainRewardIndex
+            context = L.QUEST_CHAIN .. " · " .. step.subtitle
+        end
         ui.detail:SetWordWrap(false)
         ui.detail:SetText(context)
-        View.Dock(ui, stage, data.captions, locations,
-            detail and detail.section ~= "rewards" and routeIndex or 0, data.sections.rewards,
-            detail and detail.section == "rewards" and rewardIndex or 0,
-            location and location.description, detail and detail.section)
+        View.Dock(ui, stage, data.captions, locations, focus == "rewards" and 0 or rowIndex,
+            rewards, itemIndex, location and location.description, focus)
         highlighted = Pins.Points(quest, mapZone, selectedStage)
     else
         ui.detailTitle:SetText(entry and entry.title or tabs[tab].label)
@@ -339,6 +359,7 @@ end
 
 local function back()
     if not detail then close(); return end
+    if detail.section == "chain" then chooseSection(routeSection); return end
     detail, message = nil, nil
     if returnTo then
         tab, index, activeOnly = returnTo.tab, returnTo.index, returnTo.activeOnly
@@ -398,7 +419,9 @@ chooseSection = function(section)
     if not quest then return end
     if not detail then openCurrentQuest(quest) end
     if not detail then return end
-    if section ~= "rewards" and section ~= routeSection then routeSection, routeIndex = section, 1 end
+    if section ~= "rewards" and section ~= "chain" and section ~= routeSection then
+        routeSection, routeIndex = section, 1
+    end
     detail.section, message = section, nil
     draw()
 end
@@ -486,12 +509,23 @@ local function changeListPage(offset)
     selectList(index + offset * View.pageSize)
 end
 
+local function toggleChain()
+    local quest = selectedQuest()
+    if not quest or not Data.HasChain(quest) then return end
+    chooseSection(detail and detail.section == "chain" and routeSection or "chain")
+end
+
 local function selectRoute(position)
     local quest = selectedQuest()
     if not quest then return end
     if not detail then openCurrentQuest(quest) end
     if not detail then return end
-    detail.section, routeIndex, message = routeSection, position, nil
+    if detail.section == "chain" then
+        if detail.chainIndex ~= position then detail.chainRewardIndex = 1 end
+        detail.chainIndex, message = position, nil
+    else
+        detail.section, routeIndex, message = routeSection, position, nil
+    end
     draw()
 end
 
@@ -500,6 +534,11 @@ local function selectReward(position)
     if not quest then return end
     if not detail then openCurrentQuest(quest) end
     if not detail then return end
+    if detail.section == "chain" then
+        detail.chainRewardIndex = position
+        draw()
+        return
+    end
     detail.section, rewardIndex, message = "rewards", position, nil
     local items = getDock(detail.quest).sections.rewards
     rewardIndex = math.max(1, math.min(rewardIndex, #items))
@@ -507,7 +546,8 @@ local function selectReward(position)
 end
 
 local function changeRoutePage(offset)
-    selectRoute(routeIndex + offset * View.detailPageSize)
+    local position = detail and detail.section == "chain" and detail.chainIndex or routeIndex
+    selectRoute(position + offset * View.detailPageSize)
 end
 
 local function changeRewardPage(offset)
@@ -518,6 +558,7 @@ end
 local function moveFocus(offset)
     if not detail then selectList(index + offset)
     elseif detail.section == "rewards" then selectReward(rewardIndex + offset)
+    elseif detail.section == "chain" then selectRoute(detail.chainIndex + offset)
     else selectRoute(routeIndex + offset) end
 end
 
@@ -536,7 +577,7 @@ end
 
 local function activate()
     if detail then
-        if detail.section == "rewards" then Guide.RewardView.Tooltip(ui.rewardSheet.focused)
+        if detail.section == "rewards" or detail.section == "chain" then Guide.RewardView.Tooltip(ui.rewardSheet.focused)
         else mark(activePoint()) end
     else
         local item = entries[index]
@@ -580,6 +621,8 @@ local function onPad(_, key)
     elseif key == "PADDUP" and not detail and index == 1 and ui.search:IsShown() then ui.search:SetFocus()
     elseif key == "PADDUP" then moveFocus(-1)
     elseif key == "PADDDOWN" then moveFocus(1)
+    elseif key == "PADDLEFT" and detail and detail.section == "chain" then selectReward(detail.chainRewardIndex - 1)
+    elseif key == "PADDRIGHT" and detail and detail.section == "chain" then selectReward(detail.chainRewardIndex + 1)
     elseif key == "PADDLEFT" and detail then stepSection(-1)
     elseif key == "PADDRIGHT" and detail then stepSection(1)
     elseif key == "PADDLEFT" or key == "PADLSHOULDER" then selectTab((tab - 2) % #tabs + 1)
@@ -590,6 +633,7 @@ local function onPad(_, key)
     elseif key == "PAD2" then back()
     elseif key == "PAD3" then mark(activePoint())
     elseif key == "PADLSTICK" then clearWaypoint()
+    elseif key == "PAD4" and detail and ui.chain:IsShown() then toggleChain()
     elseif key == "PAD4" then toggleFilter()
     elseif key == "PADBACK" and ui.dungeons:IsShown() then focusFilter(ui.dungeons)
     elseif key == "PADRSTICK" then
@@ -630,7 +674,7 @@ end
 local function build()
     ui = View.Create(tabs, {
         close = close, back = back, tab = selectTab, filter = toggleFilter, questMode = toggleQuestMode, dungeons = toggleDungeons, events = toggleEvents,
-        section = chooseSection, clear = clearWaypoint, route = selectRoute, changeZone = showZonePicker,
+        section = chooseSection, chain = toggleChain, clear = clearWaypoint, route = selectRoute, changeZone = showZonePicker,
         search = updateSearch,
         listPage = changeListPage, routePage = changeRoutePage, rewardPage = changeRewardPage,
         questLink = function(position)

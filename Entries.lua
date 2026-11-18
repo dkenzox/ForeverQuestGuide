@@ -8,7 +8,7 @@ function Entries.QuestTitle(quest, level)
     return quest.level and ("[%d] %s"):format(level, quest.name) or quest.name
 end
 
-local function questRow(result, zone, playerLevel, startZone)
+local function questRow(result, zone, player, startZone)
     local depth = startZone and 2 or 0
     local quest = result.quest
     local active = result.status == "active"
@@ -23,8 +23,9 @@ local function questRow(result, zone, playerLevel, startZone)
         if not active and point.labelKey == "START_AND_OBJECTIVE" then subtitle = L[point.labelKey] end
         subtitle = subtitle .. " · " .. point.name
     end
+    if Data.HasChain(quest, player) then subtitle = L.CHAIN_TAG .. " · " .. subtitle end
     local description = lines ~= "" and lines or subtitle
-    if not active and not quest.native and (not quest.min or quest.min <= 0) and result.level > playerLevel then
+    if not active and not quest.native and (not quest.min or quest.min <= 0) and result.level > player.level then
         subtitle = L.MIN_LEVEL_UNVERIFIED .. " · " .. subtitle
         description = description .. "\n" .. L.MIN_LEVEL_UNVERIFIED
     end
@@ -38,9 +39,9 @@ local function questRow(result, zone, playerLevel, startZone)
 end
 
 function Entries.Quests(quests, zone)
-    local entries, playerLevel = {}, UnitLevel("player")
+    local entries, player = {}, Data.Player()
     for _, result in ipairs(quests) do
-        entries[#entries + 1] = questRow(result, zone, playerLevel)
+        entries[#entries + 1] = questRow(result, zone, player)
     end
     return entries
 end
@@ -79,7 +80,7 @@ end
 
 function Entries.AvailableQuests(quests, zone, collapsed, searching)
     local entries, localQuests, elsewhere, startZones = {}, {}, {}, {}
-    local playerLevel, remoteCount = UnitLevel("player"), 0
+    local player, remoteCount = Data.Player(), 0
     for _, result in ipairs(quests) do
         if result.startZones then
             remoteCount = remoteCount + 1
@@ -108,7 +109,7 @@ function Entries.AvailableQuests(quests, zone, collapsed, searching)
     end
     if (not searching or #localQuests > 0) and addHeader("local", L.START_IN_THIS_ZONE, #localQuests, 0) then
         for _, result in ipairs(localQuests) do
-            local row = questRow(result, zone, playerLevel)
+            local row = questRow(result, zone, player)
             row.depth = 1
             entries[#entries + 1] = row
         end
@@ -118,12 +119,85 @@ function Entries.AvailableQuests(quests, zone, collapsed, searching)
             local group = elsewhere[start.id]
             if addHeader("zone:" .. start.id, start.name, #group, 1) then
                 for _, result in ipairs(group) do
-                    entries[#entries + 1] = questRow(result, zone, playerLevel, start.id)
+                    entries[#entries + 1] = questRow(result, zone, player, start.id)
                 end
             end
         end
     end
     return entries
+end
+
+local chainRelations = {
+    required = { L.CHAIN_PREREQUISITE, L.CHAIN_UNLOCKS },
+    alternative = { L.CHAIN_ONE_OF, L.CHAIN_OPTIONAL_UNLOCK },
+    during = { L.CHAIN_PARENT, L.CHAIN_RELATED },
+    leads = { L.CHAIN_EARLIER, L.CHAIN_FOLLOW_UP },
+}
+
+local function chainRoute(quest)
+    local function firstZone(sources)
+        for _, source in ipairs(sources) do
+            if source.points[1] then return Data.ZoneName(source.points[1].zone) end
+        end
+    end
+    local start, finish = firstZone(quest.givers), firstZone(quest.finishers)
+    if start and finish and start ~= finish then return start .. " → " .. finish end
+    return start or finish
+end
+
+function Entries.Chain(quest, player)
+    local function stepFor(candidate, relation, preceding)
+        local status, label = Data.Status(candidate, player)
+        if status == "hidden" then return end
+        if status == "possible" or status == "starter" then label = L.CHAIN_AVAILABLE end
+        local level, r, g, b = Data.Difficulty(candidate, player)
+        local role = relation and chainRelations[relation][preceding and 1 or 2] or L.CHAIN_CURRENT
+        local route = chainRoute(candidate)
+        return {
+            quest = candidate, title = Entries.QuestTitle(candidate, level), tint = { r = r, g = g, b = b },
+            subtitle = role .. " · " .. (label or L.CHAIN_UNKNOWN),
+            description = route and (route .. "\n" .. (candidate.lines[1] or "")) or candidate.lines[1],
+        }
+    end
+
+    local function walk(preceding)
+        local rows, seen, queue = {}, { [quest.id] = true }, { quest.id }
+        local cursor = 1
+        while cursor <= #queue do
+            local links = Data.ChainLinks(queue[cursor], preceding)
+            local ids = {}
+            for id in pairs(links) do
+                if not seen[id] then ids[#ids + 1] = id end
+            end
+            table.sort(ids)
+            for _, id in ipairs(ids) do
+                seen[id] = true
+                local linked = Data.Quest(id)
+                local row = linked and stepFor(linked, links[id], preceding)
+                if row then
+                    rows[#rows + 1] = row
+                    queue[#queue + 1] = id
+                end
+            end
+            cursor = cursor + 1
+        end
+        return rows
+    end
+
+    local before, after, rows = walk(true), walk(false), {}
+    local seen = {}
+    for i = #before, 1, -1 do
+        rows[#rows + 1] = before[i]
+        seen[before[i].quest.id] = true
+    end
+    local current = #rows + 1
+    rows[current] = stepFor(quest) or {
+        quest = quest, title = Entries.QuestTitle(quest, Data.Difficulty(quest, player)), subtitle = L.CHAIN_CURRENT,
+    }
+    for _, row in ipairs(after) do
+        if not seen[row.quest.id] then rows[#rows + 1] = row end
+    end
+    return rows, current
 end
 
 local function addLocations(entries, sources, stage, localZone)

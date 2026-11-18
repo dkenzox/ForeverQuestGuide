@@ -218,6 +218,8 @@ function View.Create(tabs, actions)
     ui.coords:SetTextColor(.92, .80, .53)
     ui.waypoint = View.Button(dock, L.MARK, 108, 23, "TOPRIGHT", -11, -10, actions.mark)
     ui.clearWaypoint = View.Button(dock, L.CLEAR_MARK, 104, 23, "TOPRIGHT", -124, -10, actions.clear)
+    ui.chain = View.Button(dock, L.QUEST_CHAIN, 94, 23, "TOPRIGHT", -233, -10, actions.chain)
+    ui.chain:Hide()
 
     local labels = { L.SECTION_START, L.SECTION_GOALS, L.SECTION_FINISH }
     ui.sections = {}
@@ -315,7 +317,7 @@ function View.Dock(ui, section, captions, locations, routeIndex, rewards, reward
     for key, button in pairs(ui.sections) do
         button:SetShown(hasQuest)
         button.caption:SetText(captions and captions[key] or "")
-        local selected = key == section
+        local selected = key == section and focus ~= "chain"
         if selected then button.fill:SetColorTexture(.49, .33, .15)
         else button.fill:SetColorTexture(.24, .18, .115) end
     end
@@ -324,7 +326,12 @@ function View.Dock(ui, section, captions, locations, routeIndex, rewards, reward
     ui.rewardPrev:SetShown(hasQuest)
     ui.rewardNext:SetShown(hasQuest)
     local hint = L.PAD_GUIDE_V3
-    if focus then hint = focus == "rewards" and L.PAD_REWARDS or L.PAD_DETAIL end
+    if focus == "chain" then
+        hint = L.PAD_CHAIN
+    elseif focus then
+        hint = focus == "rewards" and L.PAD_REWARDS or L.PAD_DETAIL
+        if ui.chain:IsShown() then hint = hint .. "     " .. L.PAD_OPEN_CHAIN end
+    end
     ui.hint:SetText(hint)
     if not hasQuest then return end
 
@@ -332,7 +339,7 @@ function View.Dock(ui, section, captions, locations, routeIndex, rewards, reward
     ui.routeEmpty:SetShown(#locations == 0)
     ui.routeEmpty:SetText(L.QUEST_NO_DETAILS)
     local row = ui.routeRows[(math.max(1, routeIndex) - 1) % View.detailPageSize + 1]
-    if row.title.IsTruncated and not row.title:IsTruncated() then note = nil end
+    if focus ~= "chain" and row.title.IsTruncated and not row.title:IsTruncated() then note = nil end
     ui.routeNote:SetText(note or "")
     ui.routePage:SetText(pages > 1 and ("%d / %d"):format(page, pages) or "")
     ui.routePrev:SetShown(pages > 1)
