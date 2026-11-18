@@ -52,6 +52,20 @@ local function showXP(picker, load)
     local amount, known, missing, estimated = "—", 0, 0, 0
     if picker.xpQuests then amount, known, missing, estimated = Rewards.TotalXP(picker.xpQuests, load) end
     picker.xp:SetText(amount)
+    for _, row in ipairs(picker.rows) do
+        if row:IsShown() then
+            local entry = picker.options[row.index]
+            if entry.xpQuests then
+                local rowXP = amount
+                if entry.xpQuests ~= picker.xpQuests then rowXP = Rewards.TotalXP(entry.xpQuests, load) end
+                local summary = entry.starts == 1 and L.ZONE_ROW_START_XP:format(rowXP)
+                    or L.ZONE_ROW_STARTS_XP:format(entry.starts, rowXP)
+                row.count:SetText(summary)
+            else
+                row.count:SetText("")
+            end
+        end
+    end
     if GameTooltip:IsOwned(picker.xpTile) then
         GameTooltip:SetText(L.ZONE_TOTAL_XP)
         GameTooltip:AddLine(L.ZONE_XP_SCOPE:format(picker.player.level), 1, 1, 1, true)
@@ -74,16 +88,6 @@ local function drawPreview(picker, entry)
     picker.starts:SetText(entry.starts or 0)
     picker.active:SetText(entry.active or 0)
     picker.cluster:SetText(entry.cluster or 0)
-    local quests = entry.xpQuests
-    if picker.xpQuests ~= quests then
-        picker.xpQuests = quests
-        if quests then
-            C_Timer.After(.25, function()
-                if picker:IsShown() and picker.xpQuests == quests then showXP(picker, true) end
-            end)
-        end
-    end
-    showXP(picker)
     ZoneMap.Draw(picker.map, mapID, {}, 0, "quests", nil, true, nil, mapID == picker.currentZone)
     picker.map.legend:Hide()
     picker.map.caption:Hide()
@@ -111,7 +115,6 @@ local function draw(picker)
             row.title:SetTextColor(entry.hostile and .88 or 1, entry.hostile and .71 or .94, entry.hostile and .54 or .80)
             row.region:SetText(entry.region or "")
             row.faction:SetTexture(factionIcons[entry.faction] or "Interface\\Icons\\INV_Misc_Map_01")
-            row.count:SetText(Data.ready and L.ZONE_ROW_STARTS:format(entry.starts or 0) or "")
             row.highlight:SetShown(index == picker.index)
             showLevel(row.level, entry, picker.player)
         end
@@ -119,7 +122,19 @@ local function draw(picker)
     picker.page:SetText(("%d / %d"):format(page, pages))
     picker.prev:SetEnabled(page > 1)
     picker.next:SetEnabled(page < pages)
-    drawPreview(picker, picker.options[picker.index])
+    local selected = picker.options[picker.index]
+    picker.xpQuests = selected and selected.xpQuests
+    drawPreview(picker, selected)
+    showXP(picker)
+
+    local pageKey = picker.xpPage
+    if Data.ready and (not pageKey or pageKey.options ~= picker.options or pageKey.first ~= first) then
+        pageKey = { options = picker.options, first = first }
+        picker.xpPage = pageKey
+        C_Timer.After(.25, function()
+            if picker:IsShown() and picker.xpPage == pageKey then showXP(picker, true) end
+        end)
+    end
 end
 
 local function move(picker, offset)
@@ -134,6 +149,18 @@ local function selectZone(picker)
     local mapID = entry.mapID
     if picker.recommending and entry.current then mapID = nil end
     picker.onPick(mapID, picker.recommending)
+end
+
+local function rankRecommendations(picker)
+    for _, entry in ipairs(picker.recommendations) do
+        local _, _, _, _, total = Rewards.TotalXP(entry.xpQuests or {})
+        entry.expectedXP = total or -1
+    end
+    table.sort(picker.recommendations, function(a, b)
+        if a.hostile ~= b.hostile then return not a.hostile end
+        if a.expectedXP ~= b.expectedXP then return a.expectedXP > b.expectedXP end
+        return a.zoneRank < b.zoneRank
+    end)
 end
 
 local function buildOptions(picker, pinnedZone)
@@ -153,20 +180,37 @@ local function buildOptions(picker, pinnedZone)
         automatic.name, automatic.mapID = L.CURRENT_ZONE, nil
         picker.allOptions[1] = automatic
     end
-    for _, entry in ipairs(ranked) do
-        if entry.recommended then picker.recommendations[#picker.recommendations + 1] = entry end
+    for i, entry in ipairs(ranked) do
+        if entry.recommended then
+            entry.zoneRank = i
+            picker.recommendations[#picker.recommendations + 1] = entry
+        end
         if not entry.current then
             picker.allOptions[#picker.allOptions + 1] = entry
             if entry.mapID == pinnedZone then picker.allIndex = #picker.allOptions end
         end
     end
+    if picker.recommending then rankRecommendations(picker) end
     picker.dataReady = Data.ready
 end
 
 function Picker.Refresh(picker, questStateChanged, currentZone)
     if not picker:IsShown() then return end
-    if not questStateChanged and picker.dataReady == Data.ready then showXP(picker); return end
     local selected = picker.options[picker.index]
+    if not questStateChanged and picker.dataReady == Data.ready then
+        if picker.recommending then
+            rankRecommendations(picker)
+            if selected then
+                for i, entry in ipairs(picker.options) do
+                    if entry == selected then picker.index = i; break end
+                end
+            end
+            draw(picker)
+        else
+            showXP(picker)
+        end
+        return
+    end
     local previous = picker.allOptions[picker.recommending and picker.allIndex or picker.index]
     picker.currentZone, picker.player = currentZone, Data.Player()
     picker.context:SetText(L.NEXT_ZONE_CONTEXT:format(picker.player.level, Data.ZoneName(currentZone)))
@@ -186,6 +230,7 @@ local function toggleMode(picker)
         picker.options, picker.index = picker.allOptions, picker.allIndex
     else
         picker.allIndex = picker.index
+        rankRecommendations(picker)
         picker.options, picker.index = picker.recommendations, 1
     end
     picker.recommending = not picker.recommending
@@ -276,11 +321,11 @@ function Picker.Create(parent, onPick)
         row.faction:SetPoint("LEFT", 9, 0)
         row.faction:SetSize(23, 23)
         row.title = label(row, "GameFontHighlight", "TOPLEFT", 39, -7, 216)
-        row.region = label(row, "GameFontHighlightSmall", "BOTTOMLEFT", 39, 7, 215)
+        row.region = label(row, "GameFontHighlightSmall", "BOTTOMLEFT", 39, 7, 117)
         row.region:SetTextColor(.73, .66, .54)
         row.level = label(row, "GameFontNormal", "TOPRIGHT", -9, -7, 83)
         row.level:SetJustifyH("RIGHT")
-        row.count = label(row, "GameFontHighlightSmall", "BOTTOMRIGHT", -9, 7, 83)
+        row.count = label(row, "GameFontHighlightSmall", "BOTTOMRIGHT", -9, 7, 182)
         row.count:SetJustifyH("RIGHT")
         row:SetScript("OnClick", function(self)
             if picker.index == self.index then selectZone(picker)
@@ -295,7 +340,7 @@ end
 function Picker.Open(picker, currentZone, pinnedZone)
     picker.currentZone, picker.recommending = currentZone, false
     picker.player = Data.Player()
-    picker.xpQuests = nil
+    picker.xpQuests, picker.xpPage = nil, false
     picker.context:SetText(L.NEXT_ZONE_CONTEXT:format(picker.player.level, Data.ZoneName(currentZone)))
     buildOptions(picker, pinnedZone)
     picker.options, picker.index = picker.allOptions, picker.allIndex

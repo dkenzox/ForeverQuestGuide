@@ -95,7 +95,7 @@ function Rewards.TotalXP(quests, load)
     end
     if known == 0 and missing > 0 then return "—", known, missing, estimates end
     local formatted = BreakUpLargeNumbers and BreakUpLargeNumbers(total) or tostring(total)
-    return (estimates > 0 and "~" or "") .. formatted .. (missing > 0 and "+" or ""), known, missing, estimates
+    return (estimates > 0 and "~" or "") .. formatted .. (missing > 0 and "+" or ""), known, missing, estimates, total
 end
 
 function Rewards.Summary(quest)
